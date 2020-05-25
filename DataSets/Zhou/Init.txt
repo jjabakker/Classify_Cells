@@ -1,0 +1,2 @@
+In this directory the data,csv and labels.csv files will be stored.
+This file is here just to have git create the directory

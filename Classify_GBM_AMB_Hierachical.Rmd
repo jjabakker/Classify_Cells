@@ -1,0 +1,457 @@
+---
+title: "Review AMB data set"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include = FALSE} 
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, libraries, message=FALSE}
+
+rm(list = ls())
+
+library(readr)
+library(tibble)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(Seurat)
+library(caret)
+library(data.table)
+library(matrixStats)
+library(tictoc)
+library(MazamaCoreUtils)        # Used for logging messages to a file
+library(ggraph)
+library(data.tree)
+library(DiagrammeR)
+
+
+```
+
+
+```{r, initialise, message=FALSE}
+
+PCA_Threshold   <- 0.90         # The percentage variance explained by the PCA
+                                # A high percentage requires more PC dimensions to be considered
+
+features_limit  <- 1000         # The number of features that will be considered duringthe PCA
+                                # A high number use sthe richness of the data set optimally, but makes processing slo
+
+VERBOSE         <- TRUE         # If TRUE generates analysis data
+SEURAT_VERBOSE  <- FALSE
+LOGGER          <- FALSE
+
+TRAIN_SVML      <- FALSE
+TRAIN_GBM       <- TRUE
+TRAIN_GLMNET    <- FALSE
+
+# Summary results will be kept here 
+report_out <- data.frame(Method     = character(),
+                         ModelData  = character(),
+                         TestData   = character(),
+                         Accuracy   = numeric(),
+                         Confidence = numeric())
+
+# Information of all the runs will be gathered in the class_summaries list  
+class_summaries <- list()
+
+proj_path        <- file.path(".")
+data_path        <- file.path(proj_path, "DataSets")
+log_path         <- file.path(proj_path, "Logs")
+rdata_path       <- file.path(proj_path, "rData")
+config_path      <- file.path(proj_path, "config")
+
+dataset_name     <- "AMB"
+dataset_filename <- paste0(dataset_name, "_ambxxxx")
+
+logger.setup (infoLog = file.path(log_path, "amb.log"))
+
+```
+
+
+# Read in the data
+
+```{r, Read}
+
+# Start timer
+logger.info("Info: Started reading data from dataset %s", dataset_name)
+tic(msg = "", quiet = TRUE)
+
+dataset_name     <- "AMB"
+dataset_filename <- paste0(dataset_name, "_hierarchical")
+
+READ_FRESH <- FALSE
+
+if (READ_FRESH) {
+  # Read the data and labels and format names
+  data      <- read.csv(file.path(data_path, dataset_name, "Data.csv"), 
+                        stringsAsFactors = FALSE, 
+                        row.names = 1)
+  labels    <- read.csv(file.path(data_path, dataset_name, "Labels.csv"), 
+                        stringsAsFactors = FALSE)
+  
+  save(data, labels, file = file.path(rdata_path, "amb_data.rData"))
+} else {
+  load(file.path(rdata_path, "amb_data.rData"))
+}
+
+# Make sure there are no blanks or dashes or slashes in class names
+labels      <- apply(labels, 2, function(x) str_replace_all( x, "[ -/]", "."))
+labels      <- as.data.frame(labels)
+save_data   <- data
+save_labels <- labels
+
+# Report timer
+toc(log=TRUE, quiet = TRUE)
+logger.info("Info: Finished reading data from dataset %s%s", dataset_name, tic.log()[[1]])
+tic.clearlog()
+
+```
+
+
+# Find the Variable Genes 
+
+```{r, variable_features, fig.height=5, message = FALSE, echo=FALSE}
+
+# Start timer
+logger.info("Info: Started determining variable genes" )
+tic(msg = "", quiet = TRUE)
+
+seurat_object <- CreateSeuratObject(counts    = t(data),
+                                    meta.data = as.data.frame(labels),
+                                    min.cells = 5)
+
+seurat_object <- NormalizeData(seurat_object, 
+                               normalization.method = "LogNormalize", 
+                               scale.factor = 1000000)
+
+seurat_object <- FindVariableFeatures(object           = seurat_object, 
+                                      selection.method = 'vst',
+                                      verbose          = TRUE,
+                                      nfeatures        = dim(data)[2])
+
+# Identify the most highly variable genes
+top_genes      <- VariableFeatures(seurat_object)
+
+# Show composition
+cat(sprintf("Information on dataset after variable gene determination of dataset %s\n", dataset_name))
+cat(sprintf("Removed %d genes that apparently are not very variable \n\n", dim(data)[2] - length(top_genes) )) 
+
+data = data[ , top_genes]
+cat(sprintf("\nThere are %d cells and %d features.\n", dim(data)[1], dim(data)[2]))
+
+# Report timer
+toc(log = TRUE, quiet = TRUE)
+logger.info("Info: Ended determining variable genes%s", tic.log()[[1]])
+tic.clearlog()
+
+```
+
+
+```{r, Class information, fig.height=5, message = FALSE, echo=FALSE}
+
+# Start timer
+logger.info("Info: Started classinfo")
+tic(msg = "", quiet = TRUE)
+
+cat(sprintf("\nClass information for 'Class'\n"))
+for (i in 1:length(table(labels$Class))) {
+  cat(sprintf("%-25s %d\n", names(table(labels$Class)[i]), table(labels$Class)[i]))
+}
+cat(sprintf("\n"))
+
+cat(sprintf("\nClass information for 'Subclass'\n"))
+for (i in 1:length(table(labels$Subclass))) {
+  cat(sprintf("%-25s %d\n", names(table(labels$Subclass)[i]), table(labels$Subclass)[i]))
+}
+cat(sprintf("\n"))
+
+cat(sprintf("\nClass information for 'cluster'\n"))
+for (i in 1:length(table(labels$cluster))) {
+  cat(sprintf("%-25s %d\n", names(table(labels$cluster)[i]), table(labels$cluster)[i]))
+}
+cat(sprintf("\n"))
+    
+    
+# plot variable features with and without labels
+p1 <- VariableFeaturePlot(seurat_object)
+p2 <- LabelPoints(plot   = p1, 
+                  points = top_genes[1:15], 
+                  repel  = TRUE)
+grid.arrange(p1, p2, nrow = 1)
+rm(p1, p2)
+
+# Report timer
+toc(log = TRUE, quiet = TRUE)
+logger.info("Info: Ended classinfo%s", tic.log()[[1]])
+tic.clearlog()
+
+```
+
+
+# Train class level model
+
+```{r, Class Selection}
+
+set.seed(1234)
+
+# Start timer
+logger.info("Info: Started Class level")
+tic(msg = "", quiet = TRUE)
+
+classification_category <- "Class"
+source("Code/Train/process_gbm_model_on_amb_data.R")
+p1_for_class             <- p1
+p2_for_class             <- p2
+cm_for_class             <- cm
+Predicted_for_class      <- Predicted
+class_summary_for_class  <- class_summary
+model_gbm_for_class      <- model_gbm
+preproc_model_for_class  <- preproc_model
+
+# Save
+file_name <- file.path(rdata_path, "amb_h_level_class.rData")
+save(cm, p1_for_class, 
+     p2_for_class, 
+     Predicted_for_class, 
+     class_summary_for_class, 
+     model_gbm_for_class, 
+     preproc_model_for_class, 
+     file = file_name)
+
+# Report timer
+toc(log = TRUE, quiet = TRUE)
+logger.info("Info: Ended Class level%s", tic.log()[[1]])
+tic.clearlog()
+
+```
+
+
+
+# Run the class level model and split up in classes
+
+Use the model to classify the available data. For now we use the full available data
+
+```{r}
+data                 <- save_data
+labels               <- save_labels
+
+pp_data              <- predict(preproc_model_for_class, data)
+predicted_classes    <- predict(model_gbm_for_class, pp_data)
+
+ll <- labels
+ll <- cbind(ll, predicted_classes)
+
+table(predicted_classes)
+
+gabaergic_data       <- data[which(predicted_classes == "GABAergic"),]
+gabaergic_labels     <- labels[which(predicted_classes == "GABAergic"),]
+
+glutamatergic_data   <- data[which(predicted_classes == "Glutamatergic"),]
+glutamatergic_labels <- labels[which(predicted_classes == "Glutamatergic"),]
+```
+
+
+#  Train two models to get subclasses for GABAergic and Glutamatergic
+
+```{r, Subclass Selection}
+
+set.seed(1234)
+
+# Start timer
+logger.info("Info: Started Subclass levels")
+tic(msg = "", quiet = TRUE)
+
+classification_category          <- "Subclass"
+data                             <- gabaergic_data
+labels                           <- gabaergic_labels
+
+source("Code/Train/process_gbm_model_on_amb_data.R")
+p1_for_gabaergic                 <- p1
+p2_for_gabaergic                 <- p2
+cm_for_gabaergic                 <- cm
+Predicted_for_gabaergic          <- Predicted
+class_summary_for_gabaergic      <- class_summary
+preproc_model_for_gabaergic      <- preproc_model
+model_gbm_for_gabaergic          <- model_gbm
+
+ll <- labels
+ll <- cbind(ll, predicted_classes)
+
+grid.arrange(p1, p2, ncol=2, top = "title_string")
+
+
+classification_category          <- "Subclass"
+data                             <- glutamatergic_data
+labels                           <- glutamatergic_labels
+
+source("Code/Train/process_gbm_model_on_amb_data.R")
+p1_for_glutamatergic             <- p1
+p2_for_glutamatergic             <- p2
+cm_for_glutamatergic             <- cm
+Predicted_for_glutamatergic      <- Predicted
+class_summary_for_glutamatergic  <- class_summary
+preproc_model_for_glutamatergic  <- preproc_model
+model_gbm_for_glutamatergic      <- model_gbm
+
+ll <- labels
+ll <- cbind(ll, predicted_classes)
+
+# Report timer
+toc(log = TRUE, quiet = TRUE)
+logger.info("Info: Ended Subclass level%s", tic.log()[[1]])
+tic.clearlog()
+
+```
+
+
+
+
+
+
+
+# Predict subclasses for GABAergic
+
+```{r}
+data                 <- gabaergic_data
+labels               <- gabaergic_labels
+
+pp_data              <- predict(preproc_model_for_gabaergic, data)
+predicted_classes    <- predict(model_gbm_for_gabaergic, pp_data)
+
+ll <- labels
+ll <- cbind(ll, predicted_classes)
+
+table(predicted_classes)
+
+pvalb_data       <- data[which(predicted_classes == "Pvalb"),]
+pvalb_labels     <- labels[which(predicted_classes == "Pvalb"),]
+
+lamp5_data       <- data[which(predicted_classes == "Lamp5"),]
+lamp5_labels     <- labels[which(predicted_classes == "Lamp5"),]
+```
+
+
+# Train  models for Pvalb and Lamp5
+
+```{r, Cluster  Selection}
+
+set.seed(1234)
+
+# Start timer
+logger.info("Info: Started pvalb cluster 1 level")
+tic(msg = "", quiet = TRUE)
+
+
+classification_category  <- "cluster"
+data                     <- pvalb_data
+labels                   <- pvalb_labels
+source("Code/Train/process_gbm_model_on_amb_data.R")
+
+p1_for_pvalb             <- p1
+p2_for_pvalb             <- p2
+cm_for_pvalb             <- cm
+Predicted_for_pvalb      <- Predicted
+class_summary_for_pvalb  <- class_summary
+preproc_model_for_pvalb  <- preproc_model
+model_gbm_for_pvalb      <- model_gbm
+
+ll <- labels
+ll <- cbind(ll, predicted_classes)
+
+grid.arrange(p1, p2, ncol=2, top = "title_string")
+
+
+
+classification_category  <- "cluster"
+data                     <- lamp5_data
+labels                   <- lamp5_labels
+source("Code/Train/process_gbm_model_on_amb_data.R")
+
+p1_for_lamp5             <- p1
+p2_for_lamp5             <- p2
+cm_for_lamp5             <- cm
+Predicted_for_lamp5      <- Predicted
+class_summary_for_lamp5  <- class_summary
+preproc_model_for_lamp5  <- preproc_model
+model_gbm_for_lamp5      <- model_gbm
+
+ll <- labels
+ll <- cbind(ll, predicted_classes)
+
+grid.arrange(p1, p2, ncol=2, top = "title_string")
+
+# Report timer
+toc(log = TRUE, quiet = TRUE)
+logger.info("Info: Ended Subclass 1 level%s", tic.log()[[1]])
+tic.clearlog()
+
+```
+
+
+
+
+#  Predict the subclasses for Glutamatergic class
+
+```{r, Subclass Selection}
+
+set.seed(1234)
+
+
+# Start timer
+logger.info("Info: Started Subclass 2 level")
+tic(msg = "", quiet = TRUE)
+
+classification_category  <- "Subclass"
+data                     <- glutamatergic_data
+labels                   <- glutamatergic_labels
+
+source("Code/Train/process_gbm_model_on_amb_data.R")
+p1_subclass2             <- p1
+p2_subclass2             <- p2
+cm_subclass2             <- cm
+Predicted_subclass2      <- Predicted
+class_summary_subclass2  <- class_summary
+
+ll <- labels
+ll <- cbind(ll, predicted_classes)
+
+# Report timer
+toc(log = TRUE, quiet = TRUE)
+logger.info("Info: Ended Subclass 2 level%s", tic.log()[[1]])
+tic.clearlog()
+
+```
+
+
+
+# Run GBM on cluster level
+
+```{r, cluster Selection}
+
+set.seed(1234)
+
+# Start timer
+logger.info("Info: Started cluster level")
+tic(msg = "", quiet = TRUE)
+
+classification_category <- "cluster"
+source("Code/Train/process_gbm_model_on_amb_data.R")
+p1_cluster            <- p1
+p2_cluster            <- p2
+cm_cluster            <- cm
+Predicted_cluster     <- Predicted
+class_summary_cluster <- class_summary
+
+# Report timer
+toc(log = TRUE, quiet = TRUE)
+logger.info("Info: Ended cluster level%s", tic.log()[[1]])
+tic.clearlog()
+
+```
+

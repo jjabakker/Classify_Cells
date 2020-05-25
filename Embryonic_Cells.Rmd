@@ -1,0 +1,555 @@
+---
+title: "Embryonic Cells"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r, libraries, message=FALSE}
+
+rm(list = ls())
+
+library(readr)
+library(tibble)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(rlist)
+library(gridExtra)
+library(Seurat)
+library(caret)
+library(data.table)
+library(matrixStats)
+library(tictoc)                 # Used for timing of code
+library(MazamaCoreUtils)        # Used for logging messages to a file
+
+```
+
+
+```{r}
+
+PCA_Threshold  <- 0.90          # The percentage variance explained by the PCA
+                                # A high percentage requires more PC dimensions to be considered
+
+features_limit <- 2000          # The number of features that will be considered during the PCA
+                                # A high number uses the richness of the data set optimally, but makes processing slow
+
+# Note:
+#   TRAIN_GBM_NP does not seem to have much advantage over TRAIN_GBM
+#   TRAIN_GLMNET seems to bring the computer to its knees, especially wgen wroting the results. 
+#   Better to run Direct_Compare_Models where nothing is written 
+
+
+TRAIN_RF       <- TRUE
+TRAIN_GBM      <- TRUE
+
+SAVE           <- TRUE
+
+set.seed(1234)
+```
+
+
+```{r, initialise}
+
+# Set directory paths  
+proj_path   <- file.path(".")
+data_path   <- file.path(proj_path, "DataSets")
+log_path    <- file.path(proj_path, "Logs")
+rdata_path  <- file.path(proj_path, "rData")
+config_path <- file.path(proj_path, "config")
+
+# Initialise logging and timer
+logger.setup (infoLog = file.path(log_path, "embryonic_model.log"))
+tic.clear()
+tic.clearlog()
+
+```
+
+
+# Read in datasets
+
+```{r, read datasets}
+
+datasets_names <- c(
+    "Zhou",
+    "Bo",
+    "Petropoulos1"
+    )
+
+data_list   <- list()
+labels_list <- list()
+
+for (dataset_name in datasets_names) {    
+  cat(sprintf("\nReading dataset %s.\n\n", dataset_name))
+  source("Code/Train/read_dataset.R")
+  d           <- list(dataset_name = dataset_name, data = data)
+  data_list   <- list.append(data_list, d)
+  l           <- list(dataset_name = dataset_name, labels = labels)
+  labels_list <- list.append(labels_list, l)
+}
+
+```
+
+
+# Remove all cells but PE, TE and EPI
+
+```{r}
+
+for (i in 1:length(data_list)) {
+
+  labels                        <- as.data.frame(labels_list[[i]][["labels"]])
+  data                          <- as.data.frame(data_list[[i]][["data"]])
+  dataset_name                  <- labels_list[[i]][["dataset_name"]]
+  colnames(labels)[1]           <- "ident"
+  keep                          <- which(labels[,"ident"] == "EPI" | labels[,"ident"] == "PE" | labels[,"ident"] == "TE")
+  labels                        <- labels[keep,]
+  data                          <- data[keep,]
+  labels_list[[i]][["labels"]]  <- labels
+  data_list[[i]][["data"]]      <- data
+  
+  # Show results
+  cat(sprintf("Information on dataset %s\n", dataset_name))
+  cat(sprintf("There are %d cells and %d features.\n", dim(data)[1], dim(data)[2]))
+  for (i in 1:length(table(labels$ident))) {
+    cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i]))
+  }
+  cat(sprintf("\n"))
+}
+
+```
+
+
+# Check the distributions
+
+```{r}
+for (i in 1:length(data_list)) {
+  data   <- data_list[[i]][["data"]]
+  labels <- labels_list[[i]][["labels"]]
+  
+  print(dim(data))
+                  
+  metaData     <-  data.frame(
+    nCount_RNA   = rowSums(data),
+    nFeature_RNA = (dim(data)[2] - rowCounts(as.matrix(data), value = 0))
+  )
+  
+  p1 <- ggplot(metaData, aes(x=1, y = nFeature_RNA)) + 
+    geom_violin(aes(color="red"), show.legend = FALSE) + 
+    geom_jitter(height = 0, width = 0.4) 
+  
+  p2 <- ggplot(metaData, aes(x=1, y = nCount_RNA)) + 
+    geom_violin(aes(color="red"), show.legend = FALSE) + 
+    geom_jitter(height = 0, width = 0.4)
+  
+  grid.arrange(p1, p2, ncol=2)
+}
+```
+
+# Eliminate the genes for which there is no variance
+
+```{r, eliminate_nzv}
+
+for (i in 1:length(data_list)) {
+  data                     <- data_list[[i]][["data"]]
+  ngenes                   <- dim(data)[2]
+  cat(sprintf("\n\nProcessing invariable genes for dataset %s with %d genes.\n", data_list[[i]][["dataset_name"]], ngenes))
+  nzv                      <- nearZeroVar(data, saveMetrics = TRUE)
+  data                     <- data[, which(!nzv$zeroVar)]
+  data_list[[i]][["data"]] <- data
+  
+  if (dim(data)[2] != ngenes) {
+    cat(sprintf("Removed %d invariable genes in dataset %s.\n", ngenes - dim(data)[2], data_list[[i]][["dataset_name"]]))
+    cat(sprintf("Left %d variable genes in dataset %s.\n", dim(data)[2], data_list[[i]][["dataset_name"]]))
+  } else {
+    cat(sprintf("No invariable genes found in dataset %s.\n", data_list[[i]][["dataset_name"]]))
+  }
+}
+
+```
+
+
+```{r, save_data}
+
+# The data, labels and  are saved. The variable trainRowNumbers is needed to create a test set
+
+if (SAVE) {
+  data_information = list(
+    data_list       = data_list,
+    labels_list     = labels_list
+    )
+  save(data_information,
+       file = file.path(data_path, paste0("embryonic_data_and_labels.rData")))
+}
+
+```
+
+
+# Find the Variable Genes in individual data sets
+
+```{r, variable_features, fig.height=5, message = FALSE, echo=FALSE}
+
+top_genes_list <- list()
+
+for (i in 1:length(data_list)) {
+  
+  data          <- data_list[[i]][["data"]]
+  labels        <- labels_list[[i]][["labels"]]
+  
+  seurat_object <- CreateSeuratObject(counts    = t(data),
+                                      meta.data = as.data.frame(labels),
+                                      min.cells = 5)
+
+  seurat_object <- NormalizeData(seurat_object, 
+                                 normalization.method = "LogNormalize", 
+                                 scale.factor = 1000000)
+  
+  seurat_object <- FindVariableFeatures(object           = seurat_object, 
+                                        selection.method = 'vst',
+                                        nfeatures        = dim(data)[2])
+
+
+  # Identify the most highly variable genes
+  top_genes      <- VariableFeatures(seurat_object)
+  l              <- list(dataset_name = dataset_name, top_genes = top_genes)
+  top_genes_list <- list.append(top_genes_list, l)
+
+  # Show composition
+  cat(sprintf("\n\nInformation on dataset after variable gene determination of dataset %s\n", dataset_name))
+  cat(sprintf("Removed %d genes that apparently are not very variable \n\n", dim(data)[2] - length(top_genes) )) 
+
+  data = data[, top_genes]
+  cat(sprintf("\nThere are %d cells and %d features.\n", dim(data)[1], dim(data)[2]))
+  for (i in 1:length(table(labels$ident))) {
+    cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i])) 
+  }
+  cat(sprintf("\n"))
+}
+
+top_genes <- top_genes_list[[1]][["top_genes"]]
+top_genes <- top_genes[1:1000]
+
+for (i in 2:length(top_genes_list)) {
+  top_genes <- union(top_genes, top_genes_list[[i]][["top_genes"]][1:1000])
+}
+
+cat(sprintf("\n\nThe union of top 1000 genes of each dataset contains %d genes.\n", length(top_genes)))
+
+```
+
+
+# Centering and scale data sets
+
+```{r}
+
+for (i in 1:length(data_list)) {
+  
+  cat(sprintf("\n\nScaling and centering dataset %s.\n", data_list[[i]][["dataset_name"]]))
+  data                     <- data_list[[i]][["data"]]
+  preproc_model            <- preProcess(data,
+                                         method  = c('scale', 'center'),
+                                         verbose = TRUE)
+  data                     <- predict(preproc_model, data)
+  data_list[[i]][["data"]] <- data
+
+  metaData <-  data.frame(
+    nCount_RNA   = rowSums(data),
+    nFeature_RNA = (dim(data)[2] - rowCounts(as.matrix(data), value = 0)))
+    
+  p1 <- ggplot(metaData, aes(x=1, y = nFeature_RNA)) + 
+    geom_violin(aes(color="red"), show.legend = FALSE) + 
+    geom_jitter(height = 0, width = 0.4) 
+  
+  p2 <- ggplot(metaData, aes(x=1, y = nCount_RNA)) + 
+    geom_violin(aes(color="red"), show.legend = FALSE) + 
+    geom_jitter(height = 0, width = 0.4)
+  
+  grid.arrange(p1, p2, ncol=2)
+  
+}
+```
+
+
+# Combining data sets
+
+```{r}
+
+data1           <- data_list[[1]][["data"]]
+labels1         <- labels_list[[1]][["labels"]]
+dataset_name1   <- labels_list[[1]][["dataset_name"]]
+
+cat(sprintf("\n\nCombining dataset %s.\n", data_list[[1]][["dataset_name"]]))
+for (i in 2:length(data_list)) {
+  cat(sprintf("\n\n.... with dataset %s.\n", data_list[[i]][["dataset_name"]]))
+  data2         <- data_list[[i]][["data"]]
+  labels2       <- labels_list[[i]][["labels"]]
+  dataset_name2 <- labels_list[[i]][["dataset_name"]]
+  source("Code/Train/combine_datasets.R")
+  data1         <- data                
+  labels1       <- labels  
+}
+
+# Reset factors
+labels[, "ident"] <- factor(labels[, "ident"])
+
+metaData        <-  data.frame(
+    nCount_RNA   = rowSums(data),
+    nFeature_RNA = (dim(data)[2] - rowCounts(as.matrix(data), value = 0))
+)
+
+p1 <- ggplot(metaData, aes(x=1, y = nFeature_RNA)) + 
+      geom_violin(aes(color="red"), show.legend = FALSE) + 
+      geom_jitter(height = 0, width = 0.4) 
+  
+p2 <- ggplot(metaData, aes(x=1, y = nCount_RNA)) + 
+      geom_violin(aes(color="red"), show.legend = FALSE) + 
+      geom_jitter(height = 0, width = 0.4)
+  
+grid.arrange(p1, p2, ncol=2)
+
+```
+
+
+# Create the training and test set
+
+```{r, create_sets}
+
+# Limit the data set to the top_genes 
+cn               <- colnames(data)
+ldata            <- as.data.frame(data[, intersect(cn, top_genes)])
+ldata            <- cbind.data.frame(labels, ldata)
+ldata            <- ldata %>% select(-one_of("cell_id"))
+trainRowNumbers  <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
+
+train_data       <- ldata[trainRowNumbers,]
+test_data        <- ldata[-trainRowNumbers,]
+
+```
+
+
+# Save the data and labels 
+
+```{r, save_data}
+
+# The data and labels information is saved
+
+if (SAVE) {
+  data_information = list(
+    data            = data,
+    labels          = labels,
+    trainRowNumbers = trainRowNumbers,
+    data_list       = data_list,
+    labels_list     = labels_list,
+    top_genes_list  = top_genes_list,
+    top_genes       = top_genes,
+    train_data      = train_data,
+    test_data       = test_data
+    )
+  
+  save(data_information,
+       file = file.path(rdata_path, paste0("embryonic_data_and_labels.rData")))
+}
+
+```
+
+
+```{r}
+if (FALSE) {
+  
+  load(file <- file.path(rdata_path, paste0("embryonic_data_and_labels.rData")))
+  labels    <- data_information[["labels"]]
+  data      <- data_information[["data"]]
+}
+
+```
+
+
+```{r, run_PCA}
+
+# Note: it is questionable if this is needed or even beneficial when you just do RG or GBM
+
+preproc_model <- preProcess(train_data, 
+                            method  = c('scale', 'center', 'pca'),
+                            thresh  = PCA_Threshold,
+                            verbose = TRUE)
+
+cat(sprintf("\n\nAfter PCA there are %d Principle Components\n\n", dim(preproc_model$rotation)[2]))
+
+pp_train_data <- predict(preproc_model, train_data)
+pp_test_data  <- predict(preproc_model, test_data)
+
+```
+
+
+
+### Gradient Boost Machine
+
+```{r, model_gbm}
+logger.info("Info: Started training gbm on combined dataset")
+tic(msg = "", quiet = TRUE)
+
+model_gbm    <- train(ident ~ ., 
+                      data      = pp_train_data, 
+                      method    = "gbm",
+                      trControl = trainControl("cv", 
+                                               number = 5, 
+                                               classProbs = TRUE,
+                                               verboseIter = TRUE))
+
+print(model_gbm)
+print(model_gbm$finalModel)
+
+predicted_classes <- predict(model_gbm, pp_test_data[,-1])
+probability       <- predict(model_gbm, pp_test_data[,-1], type = "prob")
+
+toc(log=TRUE, quiet = TRUE)
+logger.info("Info: Finished training gbm with combined dataset %s.", tic.log()[[1]])
+tic.clearlog()
+
+cm <- confusionMatrix(pp_test_data[ , 1],
+                    predicted_classes,
+                    mode = "everything",
+                    dnn=c("Reference", "Predicted"))
+cm
+gbm_accuracy <- cm[["overall"]][["Accuracy"]]
+
+```
+
+
+
+```{r}
+
+min_prob_value = 0.6
+min_prob_ratio = 4
+
+# Overrule the classification if the probability is too low
+prob_max   <- rowMaxs(as.matrix(probability))
+prob_ratio <- apply(probability,
+                    1,
+                    function (x) {
+                      sp = sort(x, decreasing = TRUE)
+                      return (sp[1]/sp[2])
+                    })
+reliable                     <- prob_max > min_prob_value  | prob_ratio > min_prob_ratio
+corrected_classes            <- predicted_classes
+levels(corrected_classes)    <- c(levels(predicted_classes), "Unassigned")
+corrected_classes[!reliable] <- "Unassigned"
+correct                      <-  as.character(predicted_classes) == as.character(pp_test_data[,1])
+
+# Get the prediction result nicely together
+Predicted  <- cbind("ReferenceClass" = pp_test_data[,1], 
+                    "PredictedClass" = predicted_classes, 
+                    "Reliable"       = reliable,
+                    "CorrectedClass" = corrected_classes, 
+                    "Correct"        = correct,
+                    "Max"            = prob_max, 
+                    "Ratio"          = prob_ratio,
+                    probability)
+
+assigned_cells    <- Predicted[Predicted$CorrectedClass != "Unassigned",]
+
+predicted_count   <- dim(probability)[1]
+assigned_count    <- sum(reliable)
+unassigned_count  <- predicted_count - assigned_count 
+correct_predicted <- sum(as.character(Predicted$PredictedClass) == as.character(Predicted$ReferenceClass))
+correct_assigned  <- sum(as.character(assigned_cells$PredictedClass) == as.character(assigned_cells$ReferenceClass))
+
+correct_predicted_percentage <- (correct_predicted / predicted_count) * 100
+correct_assigned_percentage  <- (correct_assigned / assigned_count) * 100
+unassigned_percentage        <- unassigned_count / predicted_count * 100
+
+acinar_overall = mean(Predicted[Predicted$PredictedClass == "acinar","Max"])
+
+class_summary <- data.frame(
+  average_prob = numeric(),
+  prob_correct = numeric(),
+  prob_incorrect = numeric(),
+  prob_reliable = numeric(),
+  prob_unreliable = numeric(),
+  nr_correct = numeric(),
+  nr_incorrect = numeric(),
+  nr_reliabe = numeric(),
+  nr_unreliabe = numeric())
+
+for (class in colnames(probability)) {
+  new_rec = data.frame(
+    average_prob = mean(Predicted[which((Predicted$PredictedClass == class)), "Max"]),
+    prob_correct = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == TRUE)), "Max"]),
+    prob_incorrect = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == FALSE)), "Max"]),
+    prob_reliable = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == TRUE)), "Max"]),
+    prob_unreliable = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == FALSE)), "Max"]),
+      
+    nr_correct = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == TRUE)), ]),
+    nr_incorrect = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == FALSE)), ]),
+    nr_reliabe = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == TRUE)), ]),
+    nr_unreliabe = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == FALSE)), ]))
+  rownames(new_rec) <- class
+  if ((new_rec$nr_correct + new_rec$nr_incorrect) != 0) {
+    class_summary <- rbind(class_summary, new_rec)
+  }
+}
+
+colnames(class_summary) = c('Average Prob', 
+                            'Prob (Correct)',
+                            'Prob (incorrect)',
+                            'Prob (Reliable)',
+                            'Prob (Unreliable)',
+                            'Nr  (Correct)',
+                            'Nr  (Incorrect)',
+                            'Nr  (Reliabe)',
+                            'Nr (Unreliabe)')
+
+# Plot the results 
+
+CorrectlyPredicted   <- Predicted[Predicted$Correct == TRUE,]
+IncorrectlyPredicted <- Predicted[Predicted$Correct == FALSE,]
+
+p1 <- ggplot() + 
+  geom_jitter(data = CorrectlyPredicted, 
+              mapping = aes(x = PredictedClass, y = Max),
+              width = 0.3,
+              height = 0,
+              alpha = 0.7,
+              size  = 0.6,
+              color = 'green') +
+  geom_jitter(data = IncorrectlyPredicted, 
+              mapping = aes(x = PredictedClass, y = Max),
+              width = 0.3,
+              height = 0,
+              alpha = 0.7,
+              size  = 0.6,
+              color = 'red') +
+  labs(x = "Predicted") +
+  labs(y = "Probability of prediction") +
+  scale_y_continuous(limits = c(0, 1.0), breaks = seq(0, 1.0, 0.1)) +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 45, hjust  = 1)) 
+
+p2 <- ggplot() + 
+  geom_jitter(data = CorrectlyPredicted, 
+              mapping = aes(x = ReferenceClass, y = Max),
+              width = 0.3,
+              height = 0,
+              alpha = 0.7,
+              size  = 0.6,
+              color = 'green') +
+  geom_jitter(data = IncorrectlyPredicted, 
+              mapping = aes(x = ReferenceClass, y = Max),
+              width = 0.3,
+              height = 0,
+              alpha = 0.7, 
+              size  = 0.6,
+              color = 'red') +
+  labs(x = "Reference") +
+  labs(y = "Probability of prediction") +
+  scale_y_continuous(limits = c(0, 1.0), breaks = seq(0, 1.0, 0.1)) +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 45, hjust  = 1)) 
+
+title_string <- sprintf("Combined dataset predicted with combined model data using method '%s' (%d features, PCA threshold of %2.1f)", 
+                        method, features_limit, PCA_Threshold)
+grid.arrange(p1, p2, ncol=2, top = title_string)
+```

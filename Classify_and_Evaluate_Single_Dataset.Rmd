@@ -1,0 +1,264 @@
+---
+title: "Classify and Evaluate - Single"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include = FALSE} 
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Make sure to set the knit directory to 'project directory' (which is Testbench_Seurat')
+Run command: rmarkdown::render("Caret_Predict.Rmd")
+
+
+```{r, libraries, message=FALSE}
+
+library(readr)
+library(tidyverse)
+library(gridExtra)
+library(caret)
+library(matrixStats)
+
+rm(list = ls())
+
+```
+
+#  Read in the model and data
+
+  
+```{r, Model names}
+
+# The flags are uses to specify which models should be run
+# Note that it possible that a model is not available in the modelset, in which case the instructiin is simply ignored
+
+PREDICT_SVML            <- TRUE
+PREDICT_SVMR            <- TRUE
+PREDICT_RF              <- TRUE
+PREDICT_GBM             <- TRUE 
+PREDICT_GLMNET          <- FALSE 
+
+```
+
+
+## Initialise
+
+```{r, Initialise}
+
+# Set directory paths  
+proj_path   <- file.path(".")
+data_path   <- file.path(proj_path, "DataSets")
+log_path    <- file.path(proj_path, "Logs")
+rdata_path  <- file.path(proj_path, "rData")
+config_path <- file.path(proj_path, "config")
+
+# Summary results will be kept here 
+report_out <- data.frame(Method     = character(),
+                         ModelData  = character(),
+                         TestData   = character(),
+                         Accuracy   = numeric(),
+                         Confidence = numeric())
+
+# Information of all the runs will be gathered in the class_summaries list  
+class_summaries <- list()
+
+
+set.seed (1234)
+
+```
+
+
+## Read the model and Data
+
+"Baron_Mouse"
+"Segerstolpe"
+"Muraro"
+"Xin"
+"c_Muraro_Segerstolpe"
+"c_Xin_Segerstolpe"
+"Zhou"
+"Bo"
+"Petropoulos1"
+"Petropoulos2"
+
+
+
+```{r, read model and data .rData files}
+
+dataset_name   <- "Xin"
+model_name     <- "Xin"
+
+#preproc_method <- "pp_normal"
+#preproc_method <- "pp_no_pca"
+preproc_method <- "pp_log_pca"
+
+source("Code/Predict/read_model_and_data.R")
+
+# In case the model and data set are the same, you do not want to predict on the whole dataset, but only on the part
+# that was not used for training. In that case eliminate the training records,
+
+if (model_name == dataset_name) {
+  data   <- data[-trainRowNumbers,]
+  labels <- labels[-trainRowNumbers,]
+  labels <- as.data.frame(labels)
+}
+  
+```
+
+
+```{r}
+
+# It is conceivable that features that were used to model, do not occur in the prediction dataset.
+# The simple, but rough, solution is to add these genes with 0 values, so that at least prediction
+# can continue. If you miss many features, it will become an issue for accuracy......
+
+missing_col <- setdiff(top_genes[1:features_limit], colnames(data))
+newcol = rep.int(0,dim(data)[1])
+if (length(missing_col) > 0) {
+  for (i in 1:length(missing_col)) {
+    data[ , missing_col[i]] = newcol
+  }
+  cat(sprintf("There were %s top %d features missing in the data datset.\n", length(missing_col), features_limit))
+} else {
+  cat(sprintf("All top %d features were present in the data set.\n", features_limit))
+}
+
+```
+
+# Predict and analyse the result
+
+## Predict svmRadial
+
+```{r, Predict_svmRadial, fig.width = 6}
+
+if (PREDICT_SVMR && !is.null(model_svmRadial)) { 
+  method <- "SVMR"
+  model  <- model_svmRadial
+  
+  #-------------------------------------------------  
+  source("Code/Predict/predict_model_with_labels.R")
+  #-------------------------------------------------
+  
+  # Inspect Predicted, CorrectlyPredicted, IncorrectlyPredicted for detailed information
+}
+
+```
+
+
+```{r, Predict_svmLinear, fig.width = 6}
+
+if (PREDICT_SVML && !is.null(model_svmLinear)) { 
+  method <- "SVML"
+  model  <- model_svmLinear
+  
+  #-------------------------------------------------  
+  source("Code/Predict/predict_model_with_labels.R")
+  #-------------------------------------------------
+  
+  # Inspect Predicted, CorrectlyPredicted, IncorrectlyPredicted for detailed information
+}
+
+```
+
+
+```{r, Predict_RF, fig.width = 6}
+
+if (PREDICT_RF && !is.null(model_rf)) { 
+  method <- "RF"
+  model  <- model_rf
+  
+  #-------------------------------------------------  
+  source("Code/Predict/predict_model_with_labels.R")
+  #-------------------------------------------------
+  
+  # Inspect Predicted, CorrectlyPredicted, IncorrectlyPredicted for detailed information
+}
+
+```
+
+
+```{r, Predict_GBM, fig.width = 6}
+
+if (PREDICT_GBM && !is.null(model_gbm)) { 
+  method <- "GBM"
+  model  <- model_gbm
+  
+  #-------------------------------------------------  
+  source("Code/Predict/predict_model_with_labels.R")
+  #-------------------------------------------------
+  
+  # Inspect Predicted, CorrectlyPredicted, IncorrectlyPredicted for detailed information
+}
+
+```
+
+
+```{r, Predict_GLMNET, fig.width = 6}
+
+if (PREDICT_GLMNET && !is.null(model_glmnet)) { 
+  method <- "GLMNET"
+  model  <- model_glmnet
+  
+  #-------------------------------------------------  
+  source("Code/Predict/predict_model_with_labels.R")
+  #-------------------------------------------------
+  
+  # Inspect Predicted, CorrectlyPredicted, IncorrectlyPredicted for detailed information
+}
+
+```
+
+
+```{r, fig.width = 6}
+print(class_summaries)
+print(report_out)
+```
+
+
+```{r, fig.width = 5}
+ggplot(report_out) +
+  geom_point(aes(x = Accuracy, y = Confidence, col = Method)) +
+  facet_wrap( ~ TestData) +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_light()
+```
+
+
+# Generate the results table 
+
+
+## With median F1
+
+```{r}
+ro <- report_out %>%
+  select(Method, TestData, medianF1, meanF1, Accuracy)
+
+d <- unique(ro$TestData)
+
+ro1 <- ro %>%
+  filter(TestData == d[1]) %>%
+  select(medianF1) 
+colnames(ro1) <- "Median F1"
+  
+ro2 <- ro %>%
+  filter(TestData == d[1]) %>%
+  select(meanF1) 
+colnames(ro2) <- "Mean F1"
+ro1 <- cbind(ro1, ro2)
+
+ro3 <- ro %>%
+  filter(TestData == d[1]) %>%
+  select(Accuracy) 
+colnames(ro3) <- "Accuracy"
+ro1 <- cbind(ro1, ro3)
+
+rownames(ro1) <- unique(ro$Method)
+knitr::kable(ro1, digits = 2, caption = "median F1")
+
+ro1
+```
+
+
+

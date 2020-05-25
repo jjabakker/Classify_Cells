@@ -1,0 +1,230 @@
+---
+title: "Classify and Evaluate - Single"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include = FALSE} 
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Make sure to set the knit directory to 'project directory' (which is Testbench_Seurat')
+Run command: rmarkdown::render("Caret_Predict.Rmd")
+
+
+```{r, libraries, message=FALSE}
+
+library(readr)
+library(tidyverse)
+library(gridExtra)
+library(caret)
+library(matrixStats)
+
+rm(list = ls())
+```
+
+#  Read in the model and data
+
+  
+```{r, Model names}
+
+PREDICT_SVML    <- TRUE
+PREDICT_SVMR    <- TRUE
+PREDICT_RF      <- TRUE
+PREDICT_GBM     <- TRUE 
+PREDICT_GBM_NP  <- TRUE 
+PREDICT_GLMNET  <- TRUE
+
+```
+
+
+## Initialise
+
+```{r, Initialise}
+
+proj_path   <- file.path(".")
+data_path   <- file.path(proj_path, "DataSets")
+log_path    <- file.path(proj_path, "Logs")
+rdata_path  <- file.path(proj_path, "rData")
+config_path <- file.path(proj_path, "config")   
+
+# Summary results will be kept here 
+report_out <- data.frame(Method     = character(),
+                         ModelData  = character(),
+                         TestData   = character(),
+                         Accuracy   = numeric(),
+                         Confidence = numeric())
+
+# Information of all the runs will be gathered in the class_summaries list  
+class_summaries <- list()
+```
+
+
+## Read the model and Data
+
+"Baron_Mouse"
+"Segerstolpe"
+"Muraro"
+"Xin"
+"c_Muraro_Segerstolpe"
+"c_Xin_Segerstolpe"
+"Zhou"
+
+
+```{r, read model and data .rData files}
+
+dataset_name <- "Baron_Mouse"
+model_name   <- "Baron_Mouse"
+
+source("Code/Predict/read_model_and_data.R")
+
+# if the dataset to be predicted is the same as the dataset the model was generated with, split of the test data
+if (model_name == dataset_name) {
+  data   <- data[-trainRowNumbers,]
+  labels <- labels[-trainRowNumbers,]
+  labels <- as.data.frame(labels)
+}
+  
+```
+
+
+```{r}
+
+# If there genes missing in the data set, add columns for these genes with expession count 0
+# If the number of columns becomes high, the accuracy of classification is affected 
+
+missing_col <- setdiff(top_genes[1:features_limit], colnames(data))
+newcol      <- rep.int(0,dim(data)[1])
+if (length(missing_col) > 0) {
+  for (i in 1:length(missing_col)) {
+    data[ , missing_col[i]] <- newcol
+  }
+  cat(sprintf("There were %s top 1000 features missing in the data datset.\n", length(missing_col)))
+} else {
+  cat(sprintf("All top 1000 features were present in the data set.\n"))
+}
+
+```
+
+
+At this stage you have two dataframes, hoding all the info: data and labels 
+
+# Predict and analyse the result
+
+
+## Predict svmRadial
+
+```{r, model_svmRadial, fig.width = 6}
+
+if (PREDICT_SVMR && !is.null(model_svmRadial)) {
+  
+  method            <- "SVMR" 
+  pp_data           <- predict(preproc_model, data)
+  predicted_classes <- predict(model_svmRadial, pp_data)
+  probability       <- predict(model_svmRadial, pp_data, type = "prob")
+  
+  source("Code/Predict/display_results.R") 
+  plot_result
+}
+
+```
+
+
+## Predict svmLinear
+
+```{r, model_svmLinear, fig.width = 6}
+
+if (PREDICT_SVML && !is.null(model_svmLinear)) { 
+  
+  method            <- "SVML" 
+  pp_data           <- predict(preproc_model, data)
+  predicted_classes <- predict(model_svmLinear, pp_data)
+  probability       <- predict(model_svmLinear, pp_data, type = "prob")
+  
+  source("Code/Predict/display_results.R") 
+  plot_result
+}
+
+```
+
+
+## Predict Random Forest
+
+```{r, model_rf, fig.width = 6}
+
+if (PREDICT_RF && !is.null(model_rf)) { 
+  method            <- "RF" 
+  pp_data           <- predict(preproc_model, data)
+  predicted_classes <- predict(model_rf, pp_data)
+  probability       <- predict(model_rf, pp_data, type = "prob")
+  
+  source("Code/Predict/display_results.R") 
+  plot_result
+}
+```
+
+
+## Predict GBM
+
+```{r, model_gbm, fig.width = 5}
+
+if (PREDICT_GBM && !is.null(model_gbm)) { 
+
+  method            <- "GBM" 
+  pp_data           <- predict(preproc_model, data)
+  predicted_classes <- predict(model_gbm, pp_data)
+  probability       <- predict(model_gbm, pp_data, type = "prob")
+   
+  source("Code/Predict/display_results.R") 
+  plot_result
+}
+
+```
+
+## Predict GBM_NP
+
+```{r, model_gbm_np, fig.width = 5}
+
+if (PREDICT_GBM_NP && !is.null(model_gbm_np)) { 
+
+  method            <- "GBM_NP" 
+  predicted_classes <- predict(model_gbm_np, data)
+  probability       <- predict(model_gbm_np, data, type = "prob")
+  
+  source("Code/Predict/display_results.R") 
+  plot_result
+  
+}
+
+```
+
+
+## Predict GLMNET
+
+```{r, model_glmnet, fig.width = 5}
+
+if (PREDICT_GLMNET && !is.null(model_glmnet)) { 
+
+  method            <- "GBM_NP" 
+  predicted_classes <- predict(model_glmnet, data)
+  probability       <- predict(model_glmnet, data, type = "prob")
+  
+  source("Code/Predict/display_results.R") 
+  plot_result
+  
+}
+
+```
+
+
+```{r, fig.width = 6}
+
+for (sum in class_summaries) {
+  print (sum)
+}
+  
+```
+
+
+

@@ -1,0 +1,650 @@
+---
+title: "Train Models"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include = FALSE} 
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, libraries, message=FALSE}
+
+rm(list = ls())
+
+library(readr)
+library(tibble)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(Seurat)
+library(caret)
+library(data.table)
+library(matrixStats)
+library(tictoc)                 # Used for timing of code
+library(MazamaCoreUtils)        # Used for logging messages to a file
+
+```
+
+
+```{r}
+
+PCA_Threshold  <- 0.90          # The percentage variance explained by the PCA
+                                # A high percentage requires more PC dimensions to be considered
+
+features_limit <- 1000          # The number of features that will be considered during the PCA
+                                # A high number uses the richness of the data set optimally, but makes processing slow
+
+# Note:
+#   TRAIN_GLMNET seems to bring the computer to its knees, especially wgen wroting the results. 
+#   Better to run Direct_Compare_Models where nothing is written 
+
+TRAIN_SVML     <- TRUE
+TRAIN_SVMR     <- TRUE
+TRAIN_RF       <- TRUE
+TRAIN_GBM      <- TRUE
+TRAIN_GLMNET   <- FALSE
+
+SAVE           <- TRUE
+
+
+#preproc_method <- "pp_normal"
+preproc_method <- "pp_no_pca"
+#preproc_method <- "pp_log_pca"
+
+set.seed(1234)
+```
+
+```{r}
+calcMedianF1 <- function(cm) {
+  F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
+  F1_2         <- F1_1[complete.cases(F1_1),]
+  F1_3         <- 2 * (F1_2[ , "Precision"] * F1_2[ , "Recall"]) / (F1_2[ ,"Precision"] + F1_2[ ,"Recall"])
+  
+  medianF1     <- median(F1_3, na.rm = TRUE)
+  meanF1       <- mean(F1_3, na.rm = TRUE)
+  return(medianF1)
+}
+```
+
+# Read in the data
+
+## Choose the data set you want to process
+
+Baron_Mouse,  1,886 cells, 14,861 genes
+Baron_Human,  8,569 cells, 17,499 genes
+Muraro,       2,122 cells, 18,915 genes  
+SegerStolpe,  2,133 cells, 22,757 genes
+Xin,          1,419 cells, 33,889 genes
+Zhou
+Bo
+Petropoulos1
+Petropoulos2
+NULL
+
+
+```{r, select datasets}
+
+# Here you determine which model to train
+dataset_name <- "Baron_Human"
+
+```
+
+
+```{r, initialise}
+
+# Set directory paths  
+proj_path   <- file.path(".")
+data_path   <- file.path(proj_path, "DataSets")
+log_path    <- file.path(proj_path, "Logs")
+rdata_path  <- file.path(proj_path, "rData")
+config_path <- file.path(proj_path, "config")
+
+# Initialise logging and timer
+logger.setup (infoLog = file.path(log_path, paste0(dataset_name, "_", 
+                                                   preproc_method, "_model.log")))
+tic.clear()
+tic.clearlog()
+
+```
+
+
+## First dataset
+
+Read the first data set 
+The name of the dataset is specified in 'dataset_name'
+The 'function' read_dataset returns two dataframes: data and labels 
+
+```{r, read first dataset}
+
+source("Code/Train/read_dataset.R")
+
+```
+
+
+```{r}
+
+saved_data   <- data
+saved_labels <- labels 
+
+```
+
+
+## Read the configuration file and process data 
+
+A number of adjustments need to be made to the data and labels (either from a single or double source)
+In a configuration file a set parameters are read in:
+
+- min_class_size      Ignore cells if they belong to very small classes.	Special value  is -1 if you do not want to pose a minimum
+- cluster_resolution	A higher number will generate more clusters	(typicaly a nummber between 0.1 and 2)
+- minCount	          Discard cells if they have less than minCount transcripts	
+- maxCount	          Discard cells if they have more than maxCount transcripts	
+- minFeature	        Discard cells if they have less than minCount genes (features)	
+- maxFeature	        Discard cells if they have more than maxfeature genes (features)	
+
+
+```{r}
+
+source("Code/Train/process_config.R")
+
+```
+
+
+# Seurat Find the Variable Genes 
+
+```{r, variable_features, fig.height=5, message = FALSE, echo=FALSE}
+
+seurat_object <- CreateSeuratObject(counts    = t(data),
+                                    meta.data = as.data.frame(labels),
+                                    min.cells = 5)
+
+seurat_object <- NormalizeData(seurat_object, 
+                               normalization.method = "LogNormalize", 
+                               scale.factor = 1000000)
+
+seurat_object <- FindVariableFeatures(object           = seurat_object, 
+                                      selection.method = 'vst',
+                                      nfeatures        = dim(data)[2])
+
+# Identify the most highly variable genes
+top_genes     <- VariableFeatures(seurat_object)
+
+# Show composition
+cat(sprintf("\n\nInformation on dataset after variable gene determination of dataset %s\n", dataset_name))
+cat(sprintf("Removed %d genes that apparently are not very variable \n\n", dim(data)[2] - length(top_genes) )) 
+
+data = data[, top_genes]
+cat(sprintf("\nThere are %d cells and %d features.\n", dim(data)[1], dim(data)[2]))
+for (i in 1:length(table(labels$ident))) {
+  cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i]))
+}
+cat(sprintf("\n"))
+  
+# Plot variable features with and without labels
+p1 <- VariableFeaturePlot(seurat_object)
+p2 <- LabelPoints(plot   = p1, 
+                  points = top_genes[1:15], 
+                  repel  = TRUE)
+grid.arrange(p1, p2, nrow = 1)
+rm(p1, p2)
+
+```
+
+
+# Seurat analysis (optional)
+
+You can choose not to run this. It does not affext the training.
+
+```{r, seurat_analysis, fig.height=5,}
+
+source("Code/Train/seurat_analysis.R")
+
+
+FeatureScatter(seurat_object, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") + NoLegend()
+VlnPlot(seurat_object, features = c("nFeature_RNA", "nCount_RNA"), ncol = 2)
+DimPlot(seurat_object, reduction = 'pca')
+DimPlot(seurat_object, reduction = 'tsne')
+DimPlot(seurat_object, reduction = 'umap', label = TRUE) + NoLegend()
+VizDimLoadings(seurat_object, dims = 1:4, reduction = 'pca')
+DimHeatmap(seurat_object, dims = 1:15, cells = 500, balanced = TRUE)
+ElbowPlot(seurat_object)
+
+```
+
+
+# Caret processing
+
+Here starts the actual training and prediction processing 
+
+
+```{r}
+
+logger.info("Info: Started Caret processing data of dataset %s", dataset_name)
+tic(msg = "", quiet = TRUE)
+
+```
+
+
+## Create the training and test set
+
+```{r, create_sets}
+
+# Limit the data set to the number of genes specified in 'features_limit' (1000 has been found to be a good choice)
+ldata            <- as.data.frame(data[top_genes[1:features_limit]])
+ldata            <- cbind.data.frame(labels, ldata)
+ldata            <- ldata %>% select(-one_of("cell_id"))
+trainRowNumbers  <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
+
+train_data       <- ldata[trainRowNumbers,]
+test_data        <- ldata[-trainRowNumbers,]
+
+```
+
+
+## Save the data and labels 
+
+```{r, save_data}
+
+# The data, labels and trainRowNumbers are saved. The variable trainRowNumbers is needed to create a test set
+
+if (SAVE) {
+  data_information = list(
+    data            = saved_data,
+    labels          = saved_labels,
+    trainRowNumbers = trainRowNumbers,
+    dataset_name    = dataset_name
+    )
+  
+  save(data_information,
+       file = file.path(rdata_path, paste0(dataset_name, "_data_and_labels.rData")))
+}
+
+```
+
+
+## Eliminate the genes for which there is no variance
+
+```{r, eliminate_nzv}
+
+# This test is still necessary, because you splitting into train and test sets may have caused
+# zero genes in the train set
+
+ngenes     <- dim(train_data)[2]
+nzv        <- nearZeroVar(train_data, saveMetrics = TRUE)
+train_data <- train_data[, which(!nzv$zeroVar)]
+test_data  <- test_data[, which(!nzv$zeroVar)]
+
+if (dim(train_data)[2] != ngenes) {
+  cat(sprintf("\n\nFound invariable genes in the train dataset. Removed %d genes.\n", dim(train_data)[2] - ngenes))
+}
+
+```
+
+
+
+## Preprocess
+
+```{r, prepocess}
+
+if (preproc_method == "pp_normal") {
+  preproc_model <- preProcess(train_data, 
+                              method  = c('scale', 'center', 'pca'),
+                              thresh  = PCA_Threshold,
+                              verbose = TRUE)
+  cat(sprintf("\n\nAfter PCA there are %d Principle Components\n\n", dim(preproc_model$rotation)[2]))
+} else if (preproc_method == "pp_no_pca") {
+  preproc_model <- preProcess(train_data, 
+                              method  = c('scale', 'center'),
+                              verbose = TRUE)
+} else if (preproc_method == "pp_log_pca") {
+  data <- log(1 + data)
+  preproc_model <- preProcess(train_data, 
+                              method  = c('scale', 'center', 'pca'),
+                              thresh  = PCA_Threshold,
+                              verbose = TRUE)
+} else { 
+  stop("No valid preprocess mode")
+}
+
+pp_train_data <- predict(preproc_model, train_data)
+pp_test_data  <- predict(preproc_model, test_data)
+
+```
+
+
+```{r}
+
+toc(log=TRUE, quiet = TRUE)
+logger.info("Info: Finished Caret processing data of dataset %s%s", dataset_name, tic.log()[[1]])
+tic.clearlog()
+
+```
+
+
+## Do the training
+
+### Support Vector Machine Linear
+
+
+```{r, model_svmLinear}
+
+model_svmLinear <- NULL
+svml_accuracy   <- 0
+svml_medianF1   <- 0
+  
+if (TRAIN_SVML) {
+  logger.info("Info: Started training svmLinear with dataset %s", dataset_name)
+  tic(msg = "", quiet = TRUE)
+  
+  model_svmLinear <- train(ident ~ ., 
+                           data      = pp_train_data, 
+                           method    = "svmLinear",
+                           trControl = trainControl("cv", 
+                                                    number = 5, 
+                                                    classProbs = TRUE,
+                                                    verboseIter = TRUE))
+  
+  print(model_svmLinear)
+  print(model_svmLinear$finalModel)
+  plot(varImp(model_svmLinear), main="Variable Importance")
+  
+  predicted_classes <- predict(model_svmLinear, pp_test_data[,-1])
+  
+  cm <- confusionMatrix(pp_test_data[,1],
+                        predicted_classes,
+                        mode = "everything",
+                        dnn=c("Reference", "Predicted"))
+  cm
+  svml_accuracy <- cm[["overall"]][["Accuracy"]]
+  svml_medianF1 <- calcMedianF1(cm)  
+  
+  toc(log=TRUE, quiet = TRUE)
+  logger.info("Info: Finished training svmLinear with dataset %s%s", dataset_name, tic.log()[[1]])
+  tic.clearlog()
+}
+
+```
+
+
+### Support Vector Machine - Radial
+
+
+```{r, model_svmRadial}
+
+model_svmRadial <- NULL
+svmr_accuracy   <- 0
+svmr_medianF1   <- 0
+
+if (TRAIN_SVMR) {
+  logger.info("Info: Started training svm Radial with dataset %s", dataset_name)
+  tic(msg = "", quiet = TRUE)
+  
+  model_svmRadial <- train(ident ~ ., 
+                           data      = pp_train_data, 
+                           method    = "svmRadial",
+                           trControl = trainControl("cv", 
+                                                    number = 5, 
+                                                    classProbs = TRUE,
+                                                    verboseIter = TRUE))
+   
+  print(model_svmRadial)
+  print(model_svmRadial$finalModel)
+  plot(varImp(model_svmRadial), main="Variable Importance")
+  
+  predicted_classes <- predict(model_svmRadial, pp_test_data[,-1])
+  
+  cm <- confusionMatrix(pp_test_data[,1],
+                        predicted_classes,
+                        mode = "everything",
+                        dnn=c("Reference", "Predicted"))
+  cm
+  svmr_accuracy <- cm[["overall"]][["Accuracy"]]
+  svmr_medianF1 <- calcMedianF1(cm)  
+  
+  toc(log=TRUE, quiet = TRUE)
+  logger.info("Info: Finished training svm Radial with dataset %s. %s", dataset_name, tic.log()[[1]])
+  tic.clearlog()
+}
+
+```
+
+
+### Random Forest
+
+```{r, model_rf}
+
+model_rf    <- NULL
+rf_accuracy <- 0
+rf_medianF1 <- 0
+
+if (TRAIN_RF) {
+  logger.info("Info: Started training Random Forest with dataset %s", dataset_name)
+  tic(msg = "", quiet = TRUE)
+  
+  model_rf    <- train(ident ~ ., 
+                       data      = pp_train_data, 
+                       method    = "rf",
+                       trControl = trainControl("cv", 
+                                                number = 5, 
+                                                classProbs = TRUE,
+                                                verboseIter = TRUE))
+  print(model_rf)
+  print(model_rf$finalModel)
+  plot(varImp(model_rf), main="Variable Importance")
+  
+  model_rf$preProcess$rotation
+  
+  predicted_classes <- predict(model_rf, pp_test_data[,-1])
+  
+  cm <- confusionMatrix(pp_test_data[,1],
+                        predicted_classes,
+                        mode = "everything",
+                        dnn=c("Reference", "Predicted"))
+  cm
+  rf_accuracy <- cm[["overall"]][["Accuracy"]]
+  tf_medianF1 <- calcMedianF1(cm)   
+  
+  toc(log=TRUE, quiet = TRUE)
+  logger.info("Info: Finished training Random Forest with dataset %s%s", dataset_name, tic.log()[[1]])
+  tic.clearlog()
+}
+
+```
+
+
+### Gradient Boost Machine
+
+```{r, model_gbm}
+
+model_gbm    <- NULL
+gbm_accuracy <- 0
+gbm_medianF1 <- 0
+
+if (TRAIN_GBM) {
+  logger.info("Info: Started training gbm with dataset %s", dataset_name)
+  tic(msg = "", quiet = TRUE)
+  
+  model_gbm    <- train(ident ~ ., 
+                        data      = pp_train_data, 
+                        method    = "gbm",
+                        trControl = trainControl("cv", 
+                                                 number = 5, 
+                                                 classProbs = TRUE,
+                                                 verboseIter = TRUE))
+
+  print(model_gbm)
+  print(model_gbm$finalModel)
+  
+  # This plot does not work for gbm
+  # plot(varImp(model_gbm), main="Variable Importance")
+  
+  predicted_classes <- predict(model_gbm, pp_test_data[,-1])
+  cm <- confusionMatrix(pp_test_data[,1],
+                        predicted_classes,
+                        mode = "everything",
+                        dnn=c("Reference", "Predicted"))
+  cm
+  gbm_accuracy <- cm[["overall"]][["Accuracy"]]
+  gbm_medianF1 <- calcMedianF1(cm)    
+  
+  toc(log=TRUE, quiet = TRUE)
+  logger.info("Info: Finished training gbm with dataset %s. %s", dataset_name, tic.log()[[1]])
+  tic.clearlog()
+}
+
+```
+
+
+
+### Generalized Linear Models net
+
+```{r, model_glmnet}
+
+model_glmnet    <- NULL
+glmnet_accuracy <- 0
+glmnet_medianF1 <- 0
+
+  
+if (TRAIN_GLMNET) {
+  logger.info("Info: Started training glmnet with dataset %s", dataset_name)
+  tic(msg = "", quiet = TRUE)
+  
+    model_glmnet <- train(ident ~ ., 
+                        data      = pp_train_data, 
+                        method    = "glmnet",
+                        tuneGrid  = expand.grid(
+                          alpha     = 0:1,
+                          lambda    = 0.10 / 10
+                        ),
+                        trControl = trainControl("cv", 
+                                                 number = 5, 
+                                                 classProbs = TRUE,
+                                                 verboseIter = FALSE))
+
+  print(model_glmnet)
+  print(model_glmnet$finalModel)
+  
+  # This plot does not work for gbm
+  # plot(varImp(model_gbm), main="Variable Importance")
+  
+  predicted_classes <- predict(model_glmnet, pp_test_data[,-1])
+  cm <- confusionMatrix(pp_test_data[,1],
+                        predicted_classes,
+                        mode = "everything",
+                        dnn=c("Reference", "Predicted"))
+  cm
+  glmnet_accuracy <- cm[["overall"]][["Accuracy"]]
+  glmnet_medianF1 <- calcMedianF1(cm)  
+  
+  toc(log = TRUE, quiet = TRUE)
+  logger.info("Info: Finished training glmnet with dataset %s. %s", dataset_name, tic.log()[[1]])
+  tic.clearlog()
+}
+
+```
+
+
+# Save the models, data and the configuration file
+
+```{r, save_models }
+
+if (SAVE) {
+  if (!config) {
+    config_data <- data.frame(
+      Parameter  = c("min_class_size",
+                     "cluster_resolution",
+                     "minCount",
+                     "maxCount",
+                     "minFeature",
+                     "maxFeature"),
+      Value  = c(min_class_size,
+                 cluster_resolution,
+                 minCount,
+                 maxCount,
+                 minFeature,
+                 maxFeature)
+      )
+    config_data <- column_to_rownames(config_data, var = "Parameter")
+  } else {
+    config_data["min_class_size", "Value"]     <- min_class_size
+    config_data["cluster_resolution", "Value"] <- cluster_resolution
+    config_data["minCount", "Value"]           <- minCount
+    config_data["maxCount", "Value"]           <- maxCount
+    config_data["minFeature", "Value"]         <- minFeature
+    config_data["maxFeature", "Value"]         <- maxFeature
+  }
+  
+  write.csv(config_data, 
+            file.path(config_path, paste0(dataset_name, "_config.csv")),
+            row.names = TRUE)
+  
+  model_information = list(
+    seurat_object      = seurat_object,
+    top_genes          = top_genes,
+    config_data        = config_data,
+    preproc_model      = preproc_model,
+    model_rf           = model_rf,
+    model_gbm          = model_gbm,
+    model_svmRadial    = model_svmRadial,
+    model_svmLinear    = model_svmLinear,
+    model_glmnet       = model_glmnet,
+    dataset_name       = dataset_name,
+    PCA_Threshold      = PCA_Threshold,
+    features_limit     = features_limit,
+    cluster_resolution = cluster_resolution
+    )
+    
+  # Now save the models for later use
+
+  save(model_information, 
+       file = file.path(rdata_path, paste0(dataset_name, "_models_", preproc_method, ".rData")))
+}
+
+```
+
+
+```{r}
+
+logger.info("")
+logger.info("Summary: Model created with dataset %s", dataset_name)
+logger.info("")
+
+logger.info("   Config Parameters")  
+logger.info("      min_class_size     : %d",    min_class_size)
+logger.info("      cluster_resolution : %2.1f", cluster_resolution)
+logger.info("      minCount           : %d",    minCount)
+logger.info("      maxCount           : %d",    maxCount)
+logger.info("      minFeature         : %d",    minFeature)
+logger.info("      maxFeature         : %d",    maxFeature)
+logger.info("")
+
+logger.info("   Preprocess")  
+logger.info("      Method             : %s", preproc_method)
+logger.info("")
+
+logger.info("   Train Parameters")  
+logger.info("      PCA Threshold      : %2.1f", PCA_Threshold)
+logger.info("      Features used      : %d",    features_limit)
+logger.info("      PCA dimensions     : %d",    dim(pp_train_data)[2])
+logger.info("")
+
+logger.info("   Accuracy")
+logger.info("      Accuracy of Random Forest is     : %3.1f%%", rf_accuracy * 100)
+logger.info("      Accuracy of GBM is               : %3.1f%%", gbm_accuracy * 100)
+logger.info("      Accuracy of SVM Radial is        : %3.1f%%", svmr_accuracy * 100)
+logger.info("      Accuracy of SVM Linear is        : %3.1f%%", svml_accuracy * 100)
+logger.info("      Accuracy of GLMNET is            : %3.1f%%", glmnet_accuracy * 100)
+logger.info("")
+logger.info("      Median F1 of Random Forest is    : %3.1f%%", rf_medianF1 * 100)
+logger.info("      Median F1 of GBM is              : %3.1f%%", gbm_medianF1 * 100)
+logger.info("      Median F1 of SVM Radial is       : %3.1f%%", svmr_medianF1 * 100)
+logger.info("      Median F1 of SVM Linear is       : %3.1f%%", svml_medianF1 * 100)
+logger.info("      Median F1 of GLMNET is           : %3.1f%%", glmnet_medianF1 * 100)
+```
+
+
+
+

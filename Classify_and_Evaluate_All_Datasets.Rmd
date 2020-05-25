@@ -1,0 +1,365 @@
+---
+title: "Classify and Evaluate - All"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include = FALSE} 
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Make sure to set the knit directory to 'project directory' (which is the directory below 'Code')
+Run command: rmarkdown::render("Caret_Predict.Rmd")
+
+
+```{r, libraries, message=FALSE}
+
+library(readr)
+library(tidyverse)
+library(gridExtra)
+library(caret)
+library(matrixStats)
+library(GGally)
+
+rm(list = ls())
+
+```
+
+#  Read in the model and data
+
+```{r, path to set}
+
+proj_path   <- file.path(".")
+data_path   <- file.path(proj_path, "DataSets")
+log_path    <- file.path(proj_path, "Logs")
+rdata_path  <- file.path(proj_path, "rData")
+config_path <- file.path(proj_path, "config")
+
+```
+
+# Predict and analyse the result
+
+```{r, fig.width = 5}
+report_out <- data.frame(Method       = character(),
+                         ModelData    = character(),
+                         TestData     = character(),
+                         Accuracy     = numeric(),
+                         CorrAccuracy = numeric(),
+                         Confidence   = numeric())
+
+
+# Specify in the to_review tibble, all the pairs of datasets and models you want to evaluate
+to_review <- tribble(
+  ~ModelData,             ~TestData,
+  
+  "SegerStolpe",          "SegerStolpe",
+  "Xin",                  "Xin",
+  # "Muraro",               "Muraro",
+  # "Baron_Human",          "Baron_Human",
+  # "Baron_Mouse",          "Baron_Mouse",
+  # "Zhou",                 "Zhou",
+  # "Bo",                   "Bo",
+  # "Petropoulos1",         "Petropoulos1"
+  
+  
+  # "c_Muraro_Segerstolpe", "c_Muraro_Segerstolpe",
+  # "c_Xin_Segerstolpe",    "c_Xin_Segerstolpe",
+  # "c_Muraro_Xin",         "c_Muraro_Xin",
+
+  # "c_Muraro_Segerstolpe", "SegerStolpe",
+  # "c_Muraro_Segerstolpe", "Muraro",
+  # "c_Muraro_Xin",         "Muraro",
+  # "c_Muraro_Xin",         "Xin",
+  # "c_Xin_Segerstolpe",    "Xin",
+  # "c_Xin_Segerstolpe",    "Segerstolpe",
+
+  # "Muraro",               "SegerStolpe",
+  # "Muraro",               "Xin",
+  # "SegerStolpe",          "Muraro",
+  # "SegerStolpe",          "Xin",
+  # "Xin",                  "Muraro",
+  # "Xin",                  "SegerStolpe"
+)
+
+to_review <- rowid_to_column(to_review, "nr")
+to_review <- as.data.frame(to_review)
+to_review
+```
+
+```{r}
+
+# Specif which models you want to run
+PREDICT_SVML           <- TRUE
+PREDICT_SVMR           <- TRUE
+PREDICT_RF             <- TRUE
+PREDICT_GBM            <- TRUE
+PREDICT_GLMNET         <- FALSE
+
+#preproc_method         <- "pp_normal"
+preproc_method         <- "pp_no_pca"
+#preproc_method         <- "pp_log_pca"
+
+```
+
+
+```{r, fig.width = 5}
+
+set.seed(1234)
+sink(file.path(log_path,'analysis-output.txt'))
+
+# Information of all the runs will be gathered in the class_summaries list  
+class_summaries <- list()
+  
+for (row in 1:nrow(to_review)) {
+  
+  # Set the data and model namde and read the data
+  model_name     <- to_review[row, "ModelData"]
+  dataset_name   <- to_review[row, "TestData"]
+  
+  source("Code/Predict/read_model_and_data.R")
+  
+  missing_col <- setdiff(top_genes[1:features_limit], colnames(data))
+  newcol = rep.int(0,dim(data)[1])
+  if (length(missing_col) > 0) {
+    for (i in 1:length(missing_col)) {
+      data[ , missing_col[i]] = newcol
+    }
+    cat(sprintf("There were %s top %d features missing in the data datset.\n", length(missing_col), features_limit))
+  } else {
+    cat(sprintf("All top %d features were present in the data set.\n", features_limit))
+  }
+  
+  # If the model and data are the same, predict only on the test set
+  if (model_name == dataset_name) {
+    data   <- data[-trainRowNumbers,]
+    labels <- labels[-trainRowNumbers,]
+    labels <- as.data.frame(labels)
+  }
+  
+  if (PREDICT_SVMR && !is.null(model_svmRadial)) { 
+    method <- "SVMR"
+    model  <- model_svmRadial
+    
+    #-------------------------------------------------  
+    source("Code/Predict/predict_model_with_labels.R")
+    #-------------------------------------------------
+  }
+  
+  if (PREDICT_SVML && !is.null(model_svmLinear)) { 
+    method <- "SVML"
+    model  <- model_svmLinear
+    
+    #-------------------------------------------------  
+    source("Code/Predict/predict_model_with_labels.R")
+    #-------------------------------------------------
+  }
+  
+  if (PREDICT_RF && !is.null(model_rf)) { 
+    method <- "RF"
+    model  <- model_rf
+    
+    #-------------------------------------------------  
+    source("Code/Predict/predict_model_with_labels.R")
+    #-------------------------------------------------  
+  }
+  
+  if (PREDICT_GBM && !is.null(model_gbm)) { 
+    method <- "GBM"
+    model  <- model_gbm
+    
+    #-------------------------------------------------  
+    source("Code/Predict/predict_model_with_labels.R")
+    #-------------------------------------------------
+  }
+ 
+  if (PREDICT_GLMNET && !is.null(model_glmnet)) { 
+    method <- "PREDICT_GLMNET"
+    model  <- model_glmnet
+    
+    #-------------------------------------------------  
+    source("Code/Predict/predict_model_with_labels.R")
+    #-------------------------------------------------
+  }
+}
+
+sink()
+```
+
+```{r, fig.width = 6}
+
+print(class_summaries)
+
+```
+
+
+
+```{r, fig.width = 5}
+plotdata <- report_out[as.character(report_out$TestData) == as.character(report_out$ModelData),]
+ggplot(report_out) +
+  geom_point(aes(x = medianF1, y = Confidence, col = TestData)) +
+  xlab("Median F1") +
+  facet_wrap( ~ Method) +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_light()
+```
+
+```{r, fig.width = 5}
+plotdata <- report_out[as.character(report_out$TestData) == as.character(report_out$ModelData),]
+ggplot(plotdata) +
+  geom_point(aes(x = CorrAccuracy, y = Confidence, col = TestData)) +
+  facet_wrap( ~ Method) +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_light() +
+  labs(x = "Corrected Accuracy")
+```
+
+```{r, fig.width = 5}
+plotdata <- report_out[as.character(report_out$TestData) == as.character(report_out$ModelData),]
+ggplot(plotdata) +
+  geom_point(aes(x = medianF1, y = Confidence, col = Method)) +
+  xlab("Median F1") +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  facet_wrap( ~ TestData) +
+  theme_light()
+```
+
+```{r}
+plotdata <- report_out[report_out$TestData == report_out$ModelData,]
+ggplot(plotdata) +
+  geom_point(aes(x = Accuracy, y = CorrAccuracy, col = Method)) +
+  theme_light() +
+  coord_fixed(ratio = 1) +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  ggtitle("The change in correctness when confidence limit is applied") +
+  labs(y = "Corrected Accuracy")
+```
+```{r}
+
+plotdata <- report_out[report_out$TestData == report_out$ModelData,]
+colnames(plotdata)[4] = "Uncorrected"
+colnames(plotdata)[5] = "Corrected"
+
+ggparcoord(plotdata, 
+           columns=4:5,
+           groupColumn = 1,
+           scale="globalminmax",
+           title = "Change in accuracy after applying the confidence limit",
+           showPoints = TRUE) +
+   theme_light() +
+   labs(y = "Accuracy") + 
+   labs(x = "")
+
+```
+
+
+```{r, fig.width = 5}
+# plotdata <- report_out[report_out$ModelData == "c_Muraro_Segerstolpe",]
+# ggplot(plotdata) +
+#   geom_point(aes(x = Accuracy, y = Confidence, col = TestData)) +
+#   facet_wrap( ~ Method) +
+#   ggtitle("Various data sets predicted with model based on combined Muraro-Segerstolpe") +
+#   theme_light()
+```
+
+```{r, fig.width = 5}
+
+# plotdata <- report_out[report_out$ModelData == "c_Muraro_Xin",]
+# ggplot(plotdata) +
+#   geom_point(aes(x = Accuracy, y = Confidence, col = TestData)) +
+#   facet_wrap( ~ Method) +
+#   ggtitle("Various data sets predicted with model based on combined Muraro-Xin") +
+#   theme_light()
+```
+
+
+
+# Generate the results table 
+
+
+## With median F1
+
+```{r}
+report_out
+
+ro <- report_out %>%
+  select(Method, TestData, medianF1)
+
+d <- unique(ro$TestData)
+
+ro1 <- ro %>%
+  filter(TestData == d[1]) %>%
+  select(medianF1) 
+colnames(ro1) <- d[1]
+
+for (i in 2:8) {
+  ro2 <- ro %>%
+    filter(TestData == d[i]) %>%
+    select(medianF1) 
+  colnames(ro2) <- d[i]
+  ro1 <- cbind(ro1, ro2)
+} 
+rownames(ro1) = unique(ro$Method)
+
+ro1
+```
+
+## With mean F1
+
+```{r}
+report_out
+
+ro <- report_out %>%
+  select(Method, TestData, meanF1)
+
+d <- unique(ro$TestData)
+
+ro1 <- ro %>%
+  filter(TestData == d[1]) %>%
+  select(meanF1) 
+colnames(ro1) <- d[1]
+
+for (i in 2:8) {
+  ro2 <- ro %>%
+    filter(TestData == d[i]) %>%
+    select(meanF1) 
+  colnames(ro2) <- d[i]
+  ro1 <- cbind(ro1, ro2)
+}
+rownames(ro1) = unique(ro$Method)
+
+ro1
+```
+
+
+## With accuracy
+
+```{r}
+report_out
+
+ro <- report_out %>%
+  select(Method, TestData, Accuracy)
+
+d <- unique(ro$TestData)
+
+ro1 <- ro %>%
+  filter(TestData == d[1]) %>%
+  select(Accuracy) 
+colnames(ro1) <- d[1]
+
+for (i in 2:8) {
+  ro2 <- ro %>%
+    filter(TestData == d[i]) %>%
+    select(Accuracy) 
+  colnames(ro2) <- d[i]
+  ro1 <- cbind(ro1, ro2)
+}
+rownames(ro1) = unique(ro$Method)
+
+ro1
+```
+
