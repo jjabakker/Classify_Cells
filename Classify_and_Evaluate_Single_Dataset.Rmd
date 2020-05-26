@@ -69,6 +69,27 @@ set.seed (1234)
 ```
 
 
+```{r, set preprocess options}
+
+preproc_method <- "pp_normal"
+preproc_method <- "pp_no_pca"
+preproc_method <- "pp_log_pca"
+
+preproc_method <- "pp_no_pca"
+
+if (preproc_method == "pp_normal")  {
+  log_preprocess   <- FALSE
+  caret_preprocess <- c('scale', 'center', 'pca')
+} else if (preproc_method == "pp_no_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess <- c('scale', 'center')
+} else if (preproc_method == "pp_log_pca")  {
+  log_preprocess   <- TRUE
+  caret_preprocess <- c('scale', 'center', 'pca')
+}
+
+```
+
 ## Read the model and Data
 
 "Baron_Mouse"
@@ -86,12 +107,8 @@ set.seed (1234)
 
 ```{r, read model and data .rData files}
 
-dataset_name   <- "Xin"
-model_name     <- "Xin"
-
-#preproc_method <- "pp_normal"
-#preproc_method <- "pp_no_pca"
-preproc_method <- "pp_log_pca"
+dataset_name   <- "Bo"
+model_name     <- "Bo"
 
 source("Code/Predict/read_model_and_data.R")
 
@@ -104,6 +121,10 @@ if (model_name == dataset_name) {
   labels <- as.data.frame(labels)
 }
   
+if (log_preprocess) {
+  data <- log(1 + data)
+}
+
 ```
 
 

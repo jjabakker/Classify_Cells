@@ -13,15 +13,7 @@ Preprocessing still needs to be done on the data
 # Do the actual predicting
 ######################################################################################################################
 
-if (preproc_method == "pp_normal" || preproc_method == "pp_no_pca") {
-  pp_data <- predict(preproc_model, data)
-} else if (preproc_method == "pp_log_pca") {
-  data    <- log(1 + data)
-  pp_data <- predict(preproc_model, data)
-} else {
-  stop("No valid preproc method specified")
-}
-
+pp_data           <- predict(preproc_model, data)
 predicted_classes <- predict(model, pp_data)
 probability       <- predict(model, pp_data, type = "prob")
 

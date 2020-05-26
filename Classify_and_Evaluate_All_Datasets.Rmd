@@ -15,14 +15,14 @@ Run command: rmarkdown::render("Caret_Predict.Rmd")
 
 ```{r, libraries, message=FALSE}
 
+rm(list = ls())
+
 library(readr)
 library(tidyverse)
 library(gridExtra)
 library(caret)
 library(matrixStats)
 library(GGally)
-
-rm(list = ls())
 
 ```
 
@@ -53,14 +53,14 @@ report_out <- data.frame(Method       = character(),
 to_review <- tribble(
   ~ModelData,             ~TestData,
   
-  "SegerStolpe",          "SegerStolpe",
   "Xin",                  "Xin",
-  # "Muraro",               "Muraro",
-  # "Baron_Human",          "Baron_Human",
-  # "Baron_Mouse",          "Baron_Mouse",
-  # "Zhou",                 "Zhou",
-  # "Bo",                   "Bo",
-  # "Petropoulos1",         "Petropoulos1"
+  "Muraro",               "Muraro",
+  #"Baron_Human",          "Baron_Human",
+  "Baron_Mouse",          "Baron_Mouse",
+  "SegerStolpe",          "SegerStolpe",
+  "Zhou",                 "Zhou",
+  "Bo",                   "Bo",
+  "Petropoulos1",         "Petropoulos1"
   
   
   # "c_Muraro_Segerstolpe", "c_Muraro_Segerstolpe",
@@ -95,10 +95,27 @@ PREDICT_SVMR           <- TRUE
 PREDICT_RF             <- TRUE
 PREDICT_GBM            <- TRUE
 PREDICT_GLMNET         <- FALSE
+```
 
-#preproc_method         <- "pp_normal"
-preproc_method         <- "pp_no_pca"
-#preproc_method         <- "pp_log_pca"
+
+```{r, set preprocess options}
+
+preproc_method <- "pp_normal"
+preproc_method <- "pp_no_pca"
+preproc_method <- "pp_log_pca"
+
+preproc_method <- "pp_log_pca"
+
+if (preproc_method == "pp_normal")  {
+  log_preprocess   <- FALSE
+  caret_preprocess <- c('scale', 'center', 'pca')
+} else if (preproc_method == "pp_no_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess <- c('scale', 'center')
+} else if (preproc_method == "pp_log_pca")  {
+  log_preprocess   <- TRUE
+  caret_preprocess <- c('scale', 'center', 'pca')
+}
 
 ```
 
@@ -119,6 +136,20 @@ for (row in 1:nrow(to_review)) {
   
   source("Code/Predict/read_model_and_data.R")
   
+  if (log_preprocess) {
+    data <- log(1 + data)
+  }
+  
+  # In case the model and data set are the same, you do not want to predict on the whole dataset, but only on the part
+  # that was not used for training. In that case eliminate the training records,
+  if (model_name == dataset_name) {
+    data   <- data[-trainRowNumbers,]
+    labels <- labels[-trainRowNumbers,]
+    labels <- as.data.frame(labels)
+  }
+  
+
+  # Check if there are top genes missing o=inthe dataset, and of so provide dummy values 
   missing_col <- setdiff(top_genes[1:features_limit], colnames(data))
   newcol = rep.int(0,dim(data)[1])
   if (length(missing_col) > 0) {
@@ -130,12 +161,6 @@ for (row in 1:nrow(to_review)) {
     cat(sprintf("All top %d features were present in the data set.\n", features_limit))
   }
   
-  # If the model and data are the same, predict only on the test set
-  if (model_name == dataset_name) {
-    data   <- data[-trainRowNumbers,]
-    labels <- labels[-trainRowNumbers,]
-    labels <- as.data.frame(labels)
-  }
   
   if (PREDICT_SVMR && !is.null(model_svmRadial)) { 
     method <- "SVMR"
@@ -280,6 +305,37 @@ ggparcoord(plotdata,
 
 # Generate the results table 
 
+## First check for missing items
+
+```{r}
+
+d <- unique(report_out$TestData)
+m <- unique(report_out$Method)
+for (i in 1:length(d)) {
+  for (j in 1:length(m)) {
+    r <- report_out %>%
+      filter(TestData == d[i] & Method == m[j]) %>%
+      select(Method, TestData)
+    if ( dim(r)[1] == 0) {
+      missing <- data.frame(Method       = m[j], 
+                            TestData     = d[i], 
+                            ModelData    = d[i], 
+                            Accuracy     = NA,
+                            CorrAccuracy = NA,
+                            Confidence   = NA,
+                            medianF1     = NA,
+                            meanF1       = NA
+                            )
+      report_out <- rbind(report_out, missing)
+    }
+  }
+} 
+
+
+report_out1 <- report_out %>% 
+  arrange(TestData, Method)
+
+```
 
 ## With median F1
 
@@ -296,7 +352,7 @@ ro1 <- ro %>%
   select(medianF1) 
 colnames(ro1) <- d[1]
 
-for (i in 2:8) {
+for (i in 2:length(d)) {
   ro2 <- ro %>%
     filter(TestData == d[i]) %>%
     select(medianF1) 
@@ -307,6 +363,7 @@ rownames(ro1) = unique(ro$Method)
 
 ro1
 ```
+
 
 ## With mean F1
 
@@ -323,7 +380,7 @@ ro1 <- ro %>%
   select(meanF1) 
 colnames(ro1) <- d[1]
 
-for (i in 2:8) {
+for (i in 2:length(d)) {
   ro2 <- ro %>%
     filter(TestData == d[i]) %>%
     select(meanF1) 
@@ -351,7 +408,7 @@ ro1 <- ro %>%
   select(Accuracy) 
 colnames(ro1) <- d[1]
 
-for (i in 2:8) {
+for (i in 2:length(d)) {
   ro2 <- ro %>%
     filter(TestData == d[i]) %>%
     select(Accuracy) 
