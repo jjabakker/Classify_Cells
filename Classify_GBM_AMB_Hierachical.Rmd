@@ -30,7 +30,6 @@ library(ggraph)
 library(data.tree)
 library(DiagrammeR)
 
-
 ```
 
 
@@ -70,6 +69,16 @@ dataset_name     <- "AMB"
 dataset_filename <- paste0(dataset_name, "_ambxxxx")
 
 logger.setup (infoLog = file.path(log_path, "amb.log"))
+
+amb_list         <- list()
+```
+
+
+```{r}
+
+# Get previously stored data back
+
+load(file.path(rdata_path, "amb_list.Rdata"))
 
 ```
 
@@ -136,7 +145,7 @@ seurat_object <- FindVariableFeatures(object           = seurat_object,
                                       nfeatures        = dim(data)[2])
 
 # Identify the most highly variable genes
-top_genes      <- VariableFeatures(seurat_object)
+top_genes     <- VariableFeatures(seurat_object)
 
 # Show composition
 cat(sprintf("Information on dataset after variable gene determination of dataset %s\n", dataset_name))
@@ -177,8 +186,7 @@ for (i in 1:length(table(labels$cluster))) {
 }
 cat(sprintf("\n"))
     
-    
-# plot variable features with and without labels
+# Plot variable features with and without labels
 p1 <- VariableFeaturePlot(seurat_object)
 p2 <- LabelPoints(plot   = p1, 
                   points = top_genes[1:15], 
@@ -206,23 +214,17 @@ tic(msg = "", quiet = TRUE)
 
 classification_category <- "Class"
 source("Code/Train/process_gbm_model_on_amb_data.R")
-p1_for_class             <- p1
-p2_for_class             <- p2
-cm_for_class             <- cm
-Predicted_for_class      <- Predicted
-class_summary_for_class  <- class_summary
-model_gbm_for_class      <- model_gbm
-preproc_model_for_class  <- preproc_model
 
-# Save
-file_name <- file.path(rdata_path, "amb_h_level_class.rData")
-save(cm, p1_for_class, 
-     p2_for_class, 
-     Predicted_for_class, 
-     class_summary_for_class, 
-     model_gbm_for_class, 
-     preproc_model_for_class, 
-     file = file_name)
+model_info = list(
+  p1            = p1,
+  p2            = p2,
+  cm            = cm,
+  predicted     = Predicted,
+  class_summary = class_summary,
+  preproc_model = preproc_model,      
+  model_gbm     = model_gbm
+)
+amb_list[["AMB"]] = model_info
 
 # Report timer
 toc(log = TRUE, quiet = TRUE)
@@ -241,19 +243,31 @@ Use the model to classify the available data. For now we use the full available 
 data                 <- save_data
 labels               <- save_labels
 
-pp_data              <- predict(preproc_model_for_class, data)
-predicted_classes    <- predict(model_gbm_for_class, pp_data)
+pp_data              <- predict(amb_list[["class"]][["preproc_model"]], data)
+predicted_classes    <- predict(amb_list[["class"]][["model_gbm"]], pp_data)
 
 ll <- labels
 ll <- cbind(ll, predicted_classes)
 
 table(predicted_classes)
 
-gabaergic_data       <- data[which(predicted_classes == "GABAergic"),]
+gabaergic_data       <- data[which(predicted_classes   == "GABAergic"),]
 gabaergic_labels     <- labels[which(predicted_classes == "GABAergic"),]
 
-glutamatergic_data   <- data[which(predicted_classes == "Glutamatergic"),]
+glutamatergic_data   <- data[which(predicted_classes   == "Glutamatergic"),]
 glutamatergic_labels <- labels[which(predicted_classes == "Glutamatergic"),]
+
+class_models_to_train <- c("GABAergic", "Glutamatergic")
+
+data_to_be_used <- list(
+    "GABAergic"     = gabaergic_data,
+    "Glutamatergic" = glutamatergic_data
+    )
+
+labels_to_be_used <- list(
+    "GABAergic"     = gabaergic_labels,
+    "Glutamatergic" = glutamatergic_labels
+    )
 ```
 
 
@@ -263,195 +277,273 @@ glutamatergic_labels <- labels[which(predicted_classes == "Glutamatergic"),]
 
 set.seed(1234)
 
-# Start timer
-logger.info("Info: Started Subclass levels")
-tic(msg = "", quiet = TRUE)
-
-classification_category          <- "Subclass"
-data                             <- gabaergic_data
-labels                           <- gabaergic_labels
-
-source("Code/Train/process_gbm_model_on_amb_data.R")
-p1_for_gabaergic                 <- p1
-p2_for_gabaergic                 <- p2
-cm_for_gabaergic                 <- cm
-Predicted_for_gabaergic          <- Predicted
-class_summary_for_gabaergic      <- class_summary
-preproc_model_for_gabaergic      <- preproc_model
-model_gbm_for_gabaergic          <- model_gbm
-
-ll <- labels
-ll <- cbind(ll, predicted_classes)
-
-grid.arrange(p1, p2, ncol=2, top = "title_string")
-
-
-classification_category          <- "Subclass"
-data                             <- glutamatergic_data
-labels                           <- glutamatergic_labels
-
-source("Code/Train/process_gbm_model_on_amb_data.R")
-p1_for_glutamatergic             <- p1
-p2_for_glutamatergic             <- p2
-cm_for_glutamatergic             <- cm
-Predicted_for_glutamatergic      <- Predicted
-class_summary_for_glutamatergic  <- class_summary
-preproc_model_for_glutamatergic  <- preproc_model
-model_gbm_for_glutamatergic      <- model_gbm
-
-ll <- labels
-ll <- cbind(ll, predicted_classes)
-
-# Report timer
-toc(log = TRUE, quiet = TRUE)
-logger.info("Info: Ended Subclass level%s", tic.log()[[1]])
-tic.clearlog()
-
+for (m in class_models_to_train) {
+  # Start timer
+  log_string <- sprintf("Info: Started training %s Subclass levels", m)
+  logger.info(log_string)
+  tic(msg = "", quiet = TRUE)
+  
+  classification_category          <- "Subclass"
+  data                             <- data_to_be_used[[m]]
+  labels                           <- labels_to_be_used[[m]]
+  
+  source("Code/Train/process_gbm_model_on_amb_data.R")
+  
+  model_info <- list(
+    p1            = p1,
+    p2            = p2,
+    cm            = cm,
+    predicted     = Predicted,
+    class_summary = class_summary,
+    preproc_model = preproc_model,      
+    model_gbm     = model_gbm
+  )
+  amb_list[[m]] <- model_info
+    
+  ll <- labels
+  ll <- cbind(ll, predicted_classes)
+  
+  grid.arrange(p1, p2, ncol=2, top = m)
+  
+  toc(log = TRUE, quiet = TRUE)
+  logger.info("Info: Ended training %s subclass levels%s", m, tic.log()[[1]])
+  tic.clearlog()
+}
 ```
-
-
-
-
 
 
 
 # Predict subclasses for GABAergic
 
 ```{r}
+
 data                 <- gabaergic_data
 labels               <- gabaergic_labels
 
-pp_data              <- predict(preproc_model_for_gabaergic, data)
-predicted_classes    <- predict(model_gbm_for_gabaergic, pp_data)
+pp_data              <- predict(amb_list[["GABAergic"]][["preproc_model"]], data)
+predicted_classes    <- predict(amb_list[["GABAergic"]][["model_gbm"]], pp_data)
 
 ll <- labels
 ll <- cbind(ll, predicted_classes)
 
 table(predicted_classes)
 
-pvalb_data       <- data[which(predicted_classes == "Pvalb"),]
+pvalb_data       <- data[which(predicted_classes   == "Pvalb"),]
 pvalb_labels     <- labels[which(predicted_classes == "Pvalb"),]
 
-lamp5_data       <- data[which(predicted_classes == "Lamp5"),]
+lamp5_data       <- data[which(predicted_classes   == "Lamp5"),]
 lamp5_labels     <- labels[which(predicted_classes == "Lamp5"),]
+
+sncg_data        <- data[which(predicted_classes   == "Sncg"),]
+sncg_labels      <- labels[which(predicted_classes == "Sncg"),]
+
+sst_data         <- data[which(predicted_classes   == "Sst"),]
+sst_labels       <- labels[which(predicted_classes == "Sst"),]
+
+serpinf1_data    <- data[which(predicted_classes   == "Serpinf1"),]
+serpinf1_labels  <- labels[which(predicted_classes == "Serpinf1"),]
+
+meis2_data      <- data[which(predicted_classes    == "Meis2"),]
+meis2_labels    <- labels[which(predicted_classes  == "Meis2"),]
+
+vip_data        <- data[which(predicted_classes    == "Vip"),]
+vip_labels      <- labels[which(predicted_classes  == "Vip"),]
+
+
+gabaergic_subclass_list <- c(
+  "Pvalb",
+  "Lamp5",
+  "Sncg",
+  "Sst",
+  #"Serpinf1",
+  #"Meis2",
+  "Vip"
+  )
+
+gabaergic_data_list <- list(
+  "Pvalb"    = pvalb_data,
+  "Lamp5"    = lamp5_data,
+  "Sncg"     = sncg_data,
+  "Sst"      = sst_data,
+  "Serpinf1" = serpinf1_data,
+  "Meis2"    = meis2_data,
+  "Vip"      = vip_data
+  )
+
+gabaergic_labels_list <- list(
+  "Pvalb"    = pvalb_labels,
+  "Lamp5"    = lamp5_labels,
+  "Sncg"     = sncg_labels,
+  "Sst"      = sst_labels,
+  "Serpinf1" = serpinf1_labels,
+  "Meis2"    = meis2_labels,
+  "Vip"      = vip_labels
+  )
+
+for (m in gabaergic_subclass_list) {
+  
+  set.seed(1234)
+  
+  # Start timer
+  logger.info("Info: Started training %s cluster level, m")
+  tic(msg = "", quiet = TRUE)
+  
+  classification_category  <- "cluster"
+  data                     <- gabaergic_data_list[[m]]
+  labels                   <- gabaergic_labels_list[[m]]
+  source("Code/Train/process_gbm_model_on_amb_data.R")
+  
+  model_info = list(
+    p1            = p1,
+    p2            = p2,
+    cm            = cm,
+    predicted     = Predicted,
+    class_summary = class_summary,
+    preproc_model = preproc_model,      
+    model_gbm     = model_gbm
+  )
+  amb_list[[m]] = model_info
+  
+  ll <- labels
+  ll <- cbind(ll, predicted_classes)
+  
+  grid.arrange(p1, p2, ncol=2, top = m)
+  
+  # Report timer
+  toc(log = TRUE, quiet = TRUE)
+  logger.info("Info: Ended training %s cluster %s", m, tic.log()[[1]])
+  tic.clearlog()
+}
+
 ```
 
+@@@@
 
-# Train  models for Pvalb and Lamp5
+# Predict subclasses for Glutamatergic
 
-```{r, Cluster  Selection}
+```{r}
 
-set.seed(1234)
+data                 <- glutamatergic_data
+labels               <- glutamatergic_labels
 
-# Start timer
-logger.info("Info: Started pvalb cluster 1 level")
-tic(msg = "", quiet = TRUE)
-
-
-classification_category  <- "cluster"
-data                     <- pvalb_data
-labels                   <- pvalb_labels
-source("Code/Train/process_gbm_model_on_amb_data.R")
-
-p1_for_pvalb             <- p1
-p2_for_pvalb             <- p2
-cm_for_pvalb             <- cm
-Predicted_for_pvalb      <- Predicted
-class_summary_for_pvalb  <- class_summary
-preproc_model_for_pvalb  <- preproc_model
-model_gbm_for_pvalb      <- model_gbm
+pp_data              <- predict(amb_list[["Glutamatergic"]][["preproc_model"]], data)
+predicted_classes    <- predict(amb_list[["Glutamatergic"]][["model_gbm"]], pp_data)
 
 ll <- labels
 ll <- cbind(ll, predicted_classes)
 
-grid.arrange(p1, p2, ncol=2, top = "title_string")
+table(predicted_classes)
 
+cr_data      <- data[which(predicted_classes   == "CR"),]
+cr_labels    <- labels[which(predicted_classes == "CR"),]
 
+l23it_data   <- data[which(predicted_classes   == "L2.3.IT"),]
+l23it_labels <- labels[which(predicted_classes == "L2.3.IT"),]
 
-classification_category  <- "cluster"
-data                     <- lamp5_data
-labels                   <- lamp5_labels
-source("Code/Train/process_gbm_model_on_amb_data.R")
+l4_data      <- data[which(predicted_classes   == "L4"),]
+l4_labels    <- labels[which(predicted_classes == "L4"),]
 
-p1_for_lamp5             <- p1
-p2_for_lamp5             <- p2
-cm_for_lamp5             <- cm
-Predicted_for_lamp5      <- Predicted
-class_summary_for_lamp5  <- class_summary
-preproc_model_for_lamp5  <- preproc_model
-model_gbm_for_lamp5      <- model_gbm
+l5it_data    <- data[which(predicted_classes   == "L5.IT"),]
+l5it_labels  <- labels[which(predicted_classes == "L5.IT"),]
 
-ll <- labels
-ll <- cbind(ll, predicted_classes)
+l5pt_data    <- data[which(predicted_classes   == "L5.PT"),]
+l5pt_labels  <- labels[which(predicted_classes == "L5.PT"),]
 
-grid.arrange(p1, p2, ncol=2, top = "title_string")
+l6ct_data    <- data[which(predicted_classes    == "L6.CT"),]
+l6ct_labels  <- labels[which(predicted_classes  == "L6.CT"),]
 
-# Report timer
-toc(log = TRUE, quiet = TRUE)
-logger.info("Info: Ended Subclass 1 level%s", tic.log()[[1]])
-tic.clearlog()
+l6it_data    <- data[which(predicted_classes    == "L6.IT"),]
+l6it_labels  <- labels[which(predicted_classes  == "L6.IT"),]
+
+l6b_data     <- data[which(predicted_classes    == "L6b"),]
+l6b_labels   <- labels[which(predicted_classes  == "L6b"),]
+
+np_data      <- data[which(predicted_classes    == "NP"),]
+np_labels    <- labels[which(predicted_classes  == "NP"),]
+
+glutamatergic_subclass_list <- c(
+  #"CR",      # problem, cause not known 
+  "L2.3.IT",
+  #"L4",      # do nor try this because it has only one class, no model needed
+  "L5.IT",
+  "L5.PT",
+  "L6.CT",
+  "L6.IT",
+  "L6b",
+  "NP"
+  )
+
+glutamatergic_data_list <- list(
+  "CR"      = cr_data,
+  "L2.3.IT" = l23it_data,
+  "L4"      = l4_data,
+  "L5.IT"   = l5it_data,
+  "L5.PT"   = l5pt_data,
+  "L6.CT"   = l6ct_data,
+  "L6.IT"   = l6it_data,
+  "L6b"     = l6b_data,
+  "NP"      = np_data
+  )
+
+glutamatergic_labels_list <- list(
+  "CR"      = cr_labels,
+  "L2.3.IT" = l23it_labels,
+  "L4"      = l4_labels,
+  "L5.IT"   = l5it_labels,
+  "L5.PT"   = l5pt_labels,
+  "L6.CT"   = l6ct_labels,
+  "L6.IT"   = l6it_labels,
+  "L6b"     = l6b_labels,
+  "NP"      = np_labels
+  )
+
+for (m in glutamatergic_subclass_list) {
+  
+  set.seed(1234)
+  
+  # Start timer
+  logger.info("Info: Started training %s cluster level, m")
+  tic(msg = "", quiet = TRUE)
+  
+  classification_category  <- "cluster"
+  data                     <- glutamatergic_data_list[[m]]
+  labels                   <- glutamatergic_labels_list[[m]]
+  source("Code/Train/process_gbm_model_on_amb_data.R")
+  
+  model_info = list(
+    p1            = p1,
+    p2            = p2,
+    cm            = cm,
+    predicted     = Predicted,
+    class_summary = class_summary,
+    preproc_model = preproc_model,      
+    model_gbm     = model_gbm
+  )
+  amb_list[[m]] = model_info
+  
+  ll <- labels
+  ll <- cbind(ll, predicted_classes)
+  
+  grid.arrange(p1, p2, ncol=2, top = m)
+  
+  # Report timer
+  toc(log = TRUE, quiet = TRUE)
+  logger.info("Info: Ended training %s cluster %s", m, tic.log()[[1]])
+  tic.clearlog()
+}
 
 ```
 
 
 
 
-#  Predict the subclasses for Glutamatergic class
 
-```{r, Subclass Selection}
-
-set.seed(1234)
-
-
-# Start timer
-logger.info("Info: Started Subclass 2 level")
-tic(msg = "", quiet = TRUE)
-
-classification_category  <- "Subclass"
-data                     <- glutamatergic_data
-labels                   <- glutamatergic_labels
-
-source("Code/Train/process_gbm_model_on_amb_data.R")
-p1_subclass2             <- p1
-p2_subclass2             <- p2
-cm_subclass2             <- cm
-Predicted_subclass2      <- Predicted
-class_summary_subclass2  <- class_summary
-
-ll <- labels
-ll <- cbind(ll, predicted_classes)
-
-# Report timer
-toc(log = TRUE, quiet = TRUE)
-logger.info("Info: Ended Subclass 2 level%s", tic.log()[[1]])
-tic.clearlog()
-
+```{r}
+save(amb_list, file = file.path(rdata_path, "amb_list.Rdata"))
 ```
 
 
 
-# Run GBM on cluster level
 
-```{r, cluster Selection}
 
-set.seed(1234)
-
-# Start timer
-logger.info("Info: Started cluster level")
-tic(msg = "", quiet = TRUE)
-
-classification_category <- "cluster"
-source("Code/Train/process_gbm_model_on_amb_data.R")
-p1_cluster            <- p1
-p2_cluster            <- p2
-cm_cluster            <- cm
-Predicted_cluster     <- Predicted
-class_summary_cluster <- class_summary
-
-# Report timer
-toc(log = TRUE, quiet = TRUE)
-logger.info("Info: Ended cluster level%s", tic.log()[[1]])
-tic.clearlog()
-
-```
 

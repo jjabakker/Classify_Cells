@@ -74,7 +74,8 @@ if (READ_FRESH) {
   names(gene_names)  <- data_sets
  
   # Save the genes per dataset
-  save(gene_names, class_names, class_freq, top_genes, file=file.path(rdata_path, "dataset_info.rData"))
+  save(gene_names, class_names, class_freq, top_genes, 
+       file=file.path(rdata_path, "dataset_info.rData"))
   
 } else {
   load(file.path(rdata_path, "dataset_info.rData"))

@@ -39,8 +39,8 @@ features_limit <- 1000          # The number of features that will be considered
                                 # A high number uses the richness of the data set optimally, but makes processing slow
 
 # Note:
-#   TRAIN_GLMNET seems to bring the computer to its knees, especially when wroting the results. 
-#   To evaluate, better to run Direct_Compare_Models where nothing is written 
+#   TRAIN_GLMNET seems to bring the computer to its knees, especially wgen wroting the results. 
+#   Better to run Direct_Compare_Models where nothing is written 
 
 TRAIN_SVML     <- TRUE
 TRAIN_SVMR     <- TRUE
@@ -51,30 +51,28 @@ TRAIN_GLMNET   <- FALSE
 SAVE           <- TRUE
 
 
-set.seed(1234)
-
-```
-
-
-```{r, set preprocess}
-
-#preproc_method <- "pp_normal"
-#preproc_method <- "pp_no_pca"
+preproc_method <- "pp_normal"
+preproc_method <- "pp_no_pca"
 preproc_method <- "pp_log_pca"
 
-if (preproc_method == "pp_normal")  {
-  log_preprocess   <- FALSE
-  caret_preprocess <- c('scale', 'center', 'pca')
-} else if (preproc_method == "pp_no_pca")  {
-  log_preprocess   <- FALSE
-  caret_preprocess <- c('scale', 'center')
-} else if (preproc_method == "pp_log_pca")  {
-  log_preprocess   <- TRUE
-  caret_preprocess <- c('scale', 'center', 'pca')
-}
-
+set.seed(1234)
 ```
 
+
+```{r}
+calcMedianF1 <- function(cm) {
+  if (is_null(dim(cm[["byClass"]]))) {
+    F1_1         <- cm[["byClass"]][c("Precision","Recall")]
+    F1_2         <- F1_1[complete.cases(F1_1)]
+    F1_3         <- 2 * (F1_2["Precision"] * F1_2["Recall"]) / (F1_2["Precision"] + F1_2["Recall"])
+  } else {
+    F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
+    F1_2         <- F1_1[complete.cases(F1_1),]
+    F1_3         <- 2 * (F1_2[ , "Precision"] * F1_2[ , "Recall"]) / (F1_2[ ,"Precision"] + F1_2[ ,"Recall"])
+  }
+  return(medianF1)
+}
+```
 
 # Read in the data
 
@@ -94,7 +92,8 @@ NULL
 
 ```{r, select datasets}
 
-dataset_name <- "Test"
+# Here you determine which model to train
+dataset_name <- "Baron_Human"
 
 ```
 
@@ -114,43 +113,27 @@ logger.setup (infoLog = file.path(log_path, paste0(dataset_name, "_",
 tic.clear()
 tic.clearlog()
 
-
-calcMedianF1 <- function(cm) {
-  F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
-  F1_2         <- F1_1[complete.cases(F1_1),]
-  F1_3         <- 2 * (F1_2[ , "Precision"] * F1_2[ , "Recall"]) / (F1_2[ ,"Precision"] + F1_2[ ,"Recall"])
-  
-  medianF1     <- median(F1_3, na.rm = TRUE)
-  meanF1       <- mean(F1_3, na.rm = TRUE)
-  return(medianF1)
-}
-
 ```
 
 
-## Read dataset
+## First dataset
 
-Read the data set 
+Read the first data set 
 The name of the dataset is specified in 'dataset_name'
 The 'function' read_dataset returns two dataframes: data and labels 
 
 ```{r, read first dataset}
 
 source("Code/Train/read_dataset.R")
-  
+
 ```
 
 
 ```{r}
 
-# Keep a copy of the untransformed data and then log transform if requested
-
 saved_data   <- data
 saved_labels <- labels 
 
-if (log_preprocess) {
-  data <- log(1 + data)
-}
 ```
 
 
@@ -305,16 +288,31 @@ if (dim(train_data)[2] != ngenes) {
 ```
 
 
+
 ## Preprocess
 
 ```{r, prepocess}
 
-# If any log transform was needed it has already been done, this is just the Caret part
+if (preproc_method == "pp_normal") {
+  preproc_model <- preProcess(train_data, 
+                              method  = c('scale', 'center', 'pca'),
+                              thresh  = PCA_Threshold,
+                              verbose = TRUE)
+  cat(sprintf("\n\nAfter PCA there are %d Principle Components\n\n", dim(preproc_model$rotation)[2]))
+} else if (preproc_method == "pp_no_pca") {
+  preproc_model <- preProcess(train_data, 
+                              method  = c('scale', 'center'),
+                              verbose = TRUE)
+} else if (preproc_method == "pp_log_pca") {
+  data <- log(1 + data)
+  preproc_model <- preProcess(train_data, 
+                              method  = c('scale', 'center', 'pca'),
+                              thresh  = PCA_Threshold,
+                              verbose = TRUE)
+} else { 
+  stop("No valid preprocess mode")
+}
 
-preproc_model    <- preProcess(train_data, 
-                               method  = caret_preprocess,
-                               thresh  = PCA_Threshold,
-                               verbose = TRUE)
 pp_train_data <- predict(preproc_model, train_data)
 pp_test_data  <- predict(preproc_model, test_data)
 
@@ -451,7 +449,7 @@ if (TRAIN_RF) {
                         dnn=c("Reference", "Predicted"))
   cm
   rf_accuracy <- cm[["overall"]][["Accuracy"]]
-  tf_medianF1 <- calcMedianF1(cm)   
+  rf_medianF1 <- calcMedianF1(cm)   
   
   toc(log=TRUE, quiet = TRUE)
   logger.info("Info: Finished training Random Forest with dataset %s%s", dataset_name, tic.log()[[1]])

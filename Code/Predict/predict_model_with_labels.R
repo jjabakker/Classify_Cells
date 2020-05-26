@@ -189,13 +189,16 @@ print(cm)
 # Calculate median F1
 ######################################################################################################################
 
-F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
-F1_2         <- F1_1[complete.cases(F1_1),]
-if  (class(F1_2) == "numeric") {
+if (is_null(dim(cm[["byClass"]]))) {
+  F1_1         <- cm[["byClass"]][c("Precision","Recall")]
+  F1_2         <- F1_1[complete.cases(F1_1)]
   F1_3         <- 2 * (F1_2["Precision"] * F1_2["Recall"]) / (F1_2["Precision"] + F1_2["Recall"])
 } else {
+  F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
+  F1_2         <- F1_1[complete.cases(F1_1),]
   F1_3         <- 2 * (F1_2[ , "Precision"] * F1_2[ , "Recall"]) / (F1_2[ ,"Precision"] + F1_2[ ,"Recall"])
 }
+
 medianF1     <- median(F1_3, na.rm = TRUE)
 meanF1       <- mean(F1_3, na.rm = TRUE)
 

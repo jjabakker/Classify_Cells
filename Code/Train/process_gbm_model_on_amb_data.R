@@ -1,6 +1,6 @@
 '
 ######################################################################################################################
-The script does some preprocessong, then trains a GBM model on AMB data and then predicts against the test set.
+The script does some preprocessing, then trains a GBM model on AMB data and then predicts against the test set.
 ######################################################################################################################
 '
 
@@ -66,14 +66,12 @@ train_data              <- cbind(train_data[,1], td)
 colnames(train_data)[1] <- "ident"
 # end fix
 
-
 preproc_model <- preProcess(train_data, 
                             method  = c('scale', 'center', 'pca'),
                             thresh  = PCA_Threshold,
                             verbose = TRUE)
 
 pp_train_data <- predict(preproc_model, train_data)
-
 
 model_gbm     <- train(ident ~ ., 
                        data      = pp_train_data, 
@@ -115,12 +113,8 @@ cm <- confusionMatrix(test_data[,1],
                       dnn = c("Reference", "Predicted"))
 gbm_accuracy <- cm[["overall"]][["Accuracy"]]
 
-F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
-F1_2         <- F1_1[complete.cases(F1_1),]
-F1_3         <- 2 * (F1_2[,"Precision"] * F1_2[,"Recall"]) / (F1_2[,"Precision"] + F1_2[,"Recall"])
-gbm_F1       <- median(F1_3, na.rm = TRUE)
 
-knitr::kable(class_summary, digits = 3, caption = "Class Summary overview")
+#knitr::kable(class_summary, digits = 3, caption = "Class Summary overview")
 
-
+print(class_summary)
 

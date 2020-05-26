@@ -264,9 +264,15 @@ if (TRAIN_GBM_PP_NORMAL) {
   print(cm)
   gbm_accuracy <- cm[["overall"]][["Accuracy"]]
   
-  F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
-  F1_2         <- F1_1[complete.cases(F1_1),]
-  F1_3         <- 2 * (F1_2[,"Precision"] * F1_2[,"Recall"]) / (F1_2[,"Precision"] + F1_2[,"Recall"])
+  if (is_null(dim(cm[["byClass"]]))) {
+    F1_1         <- cm[["byClass"]][c("Precision","Recall")]
+    F1_2         <- F1_1[complete.cases(F1_1)]
+    F1_3         <- 2 * (F1_2["Precision"] * F1_2["Recall"]) / (F1_2["Precision"] + F1_2["Recall"])
+  } else {
+    F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
+    F1_2         <- F1_1[complete.cases(F1_1),]
+    F1_3         <- 2 * (F1_2[ , "Precision"] * F1_2[ , "Recall"]) / (F1_2[ ,"Precision"] + F1_2[ ,"Recall"])
+  }
   gbm_F1       <- median(F1_3, na.rm = TRUE)
   knitr::kable(class_summary, digits = 3, caption = "Class Summary overview")
  
