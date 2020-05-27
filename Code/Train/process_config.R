@@ -41,6 +41,18 @@ minFeature         <- ifelse(config, as.integer(config_data["minFeature", "Value
 maxFeature         <- ifelse(config, as.integer(config_data["maxFeature", "Value"]),         -1)
 
 ####################################################################################
+# Save parameters to see if sonething changed later
+####################################################################################
+
+ori_minCount           <- minCount
+ori_maxCount           <- maxCount
+ori_minFeature         <- minFeature
+ori_maxFeature         <- maxFeature
+ori_min_class_size     <- min_class_size 
+ori_cluster_resolution <- cluster_resolution
+new_config             <- !config
+
+####################################################################################
 # Read back the variables that will be used
 ####################################################################################
 

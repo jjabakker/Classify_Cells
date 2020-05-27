@@ -10,6 +10,29 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+```{r}
+rm(list = ls())
+set.seed(1234)
+```
+
+
+# Set key use parameters
+
+```{r}
+
+# Set datasetname
+
+dataset_name     <- "AMB"
+
+# Select preprocessing
+
+preproc_method   <- "pp_pca"
+preproc_method   <- "pp_no_pca"
+preproc_method   <- "pp_log_pca"
+
+preproc_method   <- "pp_log_pca"
+```
+
 ```{r, libraries, message=FALSE}
 
 library(readr)
@@ -28,8 +51,6 @@ library(ggraph)
 library(data.tree)
 library(DiagrammeR)
 
-rm(list = ls())
-
 ```
 
 
@@ -44,10 +65,6 @@ features_limit  <- 1000         # The number of features that will be considered
 VERBOSE         <- TRUE         # If TRUE generates analysis data
 SEURAT_VERBOSE  <- FALSE
 LOGGER          <- FALSE
-
-TRAIN_SVML      <- FALSE
-TRAIN_GBM       <- TRUE
-TRAIN_GLMNET    <- FALSE
 
 # Summary results will be kept here 
 report_out <- data.frame(Method     = character(),
@@ -65,10 +82,23 @@ log_path         <- file.path(proj_path, "Logs")
 rdata_path       <- file.path(proj_path, "rData")
 config_path      <- file.path(proj_path, "config")
 
-dataset_name     <- "AMB"
-dataset_filename <- paste0(dataset_name, "_ambxxxx")
-
 logger.setup (infoLog = file.path(log_path, "amb.log"))
+
+```
+
+
+```{r, set preprocess options}
+
+if (preproc_method == "pp_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess_method <- c('scale', 'center', 'pca')
+} else if (preproc_method == "pp_no_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess_method <- c('scale', 'center')
+} else if (preproc_method == "pp_log_pca")  {
+  log_preprocess   <- TRUE
+  caret_preprocess_method <- c('scale', 'center', 'pca')
+}
 
 ```
 
@@ -81,7 +111,6 @@ logger.setup (infoLog = file.path(log_path, "amb.log"))
 logger.info("Info: Started reading data from dataset %s", dataset_name)
 tic(msg = "", quiet = TRUE)
 
-dataset_name     <- "AMB"
 dataset_filename <- paste0(dataset_name, "_model_compare")
 
 READ_FRESH <- FALSE
@@ -99,6 +128,7 @@ if (READ_FRESH) {
   load(file.path(rdata_path, "amb_data.rData"))
 }
 
+# Log transform if requested
 # Make sure there are no blanks or dashes or slashes in class names
 labels      <- apply(labels, 2, function(x) str_replace_all( x, "[ -/]", "."))
 labels      <- as.data.frame(labels)
@@ -114,8 +144,8 @@ tic.clearlog()
 
 # Inspect structure
 
-
 ## Original
+
 ```{r}
 
 labels %>%
@@ -124,7 +154,9 @@ labels %>%
 filter( n > 10) 
   
 ```
+
 ## Class level
+
 ```{r}
 
 l1 <- labels %>%
@@ -146,6 +178,7 @@ cbind(l1,l2)
 
 
 ## Subclass level GABAergic
+
 ```{r}
 
 l1 <- labels %>%
@@ -167,16 +200,14 @@ l2 <- labels %>%
 l1 <- column_to_rownames(l1, var = "Subclass")
 l2 <- column_to_rownames(l2, var = "Subclass")
 l  <- cbind(l1,l2)
-#r  <- t(as.data.frame(colSums(l)))
-#rownames(r) <- "Total"
-#l <- rbind(l, r)
 l
+
 ```
 
 
 ## Subclass level Glutamatergic
-```{r}
 
+```{r}
 
 l1 <- labels %>%
   filter(Class == "Glutamatergic") %>%
@@ -197,13 +228,12 @@ l2 <- labels %>%
 l1 <- column_to_rownames(l1, var = "Subclass")
 l2 <- column_to_rownames(l2, var = "Subclass")
 l  <- cbind(l1,l2)
-# r  <- t(as.data.frame(colSums(l)))
-# rownames(r) <- "Total"
-# l <- rbind(l, r)
 l
+
 ```
 
 ## Subclass level Non.Neuronal	
+
 ```{r}
 
 l1 <- labels %>%
@@ -225,43 +255,51 @@ l2 <- labels %>%
 l1 <- column_to_rownames(l1, var = "Subclass")
 l2 <- column_to_rownames(l2, var = "Subclass")
 cbind(l1,l2)
+
 ```
 
 ```{r}
+
 labels %>%
   filter(Class == "Glutamatergic") %>%
   group_by(Subclass) %>%
   summarise(CellsInCluster = n()) %>%
   filter( CellsInCluster > 10) %>%
   arrange (Subclass)
+
 ```
 
 
 ```{r}
+
 labels %>%
   group_by(cluster) %>%
   summarise(n = n()) %>%
-
   arrange (cluster)
+
 ```
 
 
 ```{r}
+
 labels %>%
   group_by(Class, Subclass, cluster) %>%
   summarise(n = n())  %>%
   filter( Class !=  "Glutamatergic" & Class !=  "GABAergic") %>%
   arrange (Class, Subclass, cluster)
+
 ```
 
 
 ```{r}
+
 l <- labels
 l$amb        <- rep("amb", dim(l)[1])
 l            <- l[, c("amb", "Class")]
 l$pathString <- do.call(paste,c(l,sep="/"))
 l.graph      <- data.tree::as.Node(l)
 plot(l.graph)
+
 ```
 
 
@@ -390,7 +428,10 @@ if (SEURAT_VERBOSE) {
   
   cluster_resolution = 0.5
   
+  #-------------------------------------
   source("Code/Train/seurat_analysis.R")
+  #-------------------------------------
+  
   FeatureScatter(seurat_object, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") + NoLegend()
   VlnPlot(seurat_object, features = c("nFeature_RNA", "nCount_RNA"), ncol = 2)
   DimPlot(seurat_object, reduction = 'pca')
@@ -432,8 +473,6 @@ You have to choose which one to use  and copy that into the 'ident' column on po
 
 ```{r, Class Selection}
 
-set.seed(1234)
-
 data      <- save_data 
 labels    <- save_labels 
 
@@ -442,7 +481,11 @@ logger.info("Info: Started Class level")
 tic(msg = "", quiet = TRUE)
 
 classification_category <- "Class"
+
+#---------------------------------------------------
 source("Code/Train/process_gbm_model_on_amb_data.R")
+#---------------------------------------------------
+
 p1_class            <- p1
 p2_class            <- p2
 cm_class            <- cm
@@ -464,8 +507,6 @@ tic.clearlog()
 
 ```{r, Subclass Selection}
 
-set.seed(1234)
-
 data      <- save_data 
 labels    <- save_labels 
 
@@ -474,7 +515,11 @@ logger.info("Info: Started Subclass level")
 tic(msg = "", quiet = TRUE)
 
 classification_category <- "Subclass"
+
+#---------------------------------------------------
 source("Code/Train/process_gbm_model_on_amb_data.R")
+#---------------------------------------------------
+
 p1_subclass            <- p1
 p2_subclass            <- p2
 cm_subclass            <- cm
@@ -496,8 +541,6 @@ tic.clearlog()
 
 ```{r, cluster Selection}
 
-set.seed(1234)
-
 data      <- save_data 
 labels    <- save_labels 
 
@@ -506,7 +549,11 @@ logger.info("Info: Started cluster level")
 tic(msg = "", quiet = TRUE)
 
 classification_category <- "cluster"
+
+#---------------------------------------------------
 source("Code/Train/process_gbm_model_on_amb_data.R")
+#---------------------------------------------------
+
 p1_cluster            <- p1
 p2_cluster            <- p2
 cm_cluster            <- cm

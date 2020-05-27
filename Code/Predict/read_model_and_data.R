@@ -30,7 +30,6 @@ if (file.exists(d_name)) {
   err <- sprintf("Data file %s could not be read", d_name)  
   stop(err)
 }
-load(file = d_name)
 
 # From the model file define the following
 preproc_model   <- model_information[["preproc_model"]]

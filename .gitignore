@@ -43,3 +43,9 @@ Logs/analysis-output.txt
 
 DataSets/AMB/
 
+
+Logs/pp_pca_all_classify.txt
+
+Logs/pp_log_pca_all_classify.txt
+
+Logs/pp_no_pca_all_classify.txt

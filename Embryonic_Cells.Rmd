@@ -8,10 +8,13 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+```{r}
+rm(list = ls())
+set.seed(1234)
+```
+
 
 ```{r, libraries, message=FALSE}
-
-rm(list = ls())
 
 library(readr)
 library(tibble)
@@ -49,7 +52,6 @@ TRAIN_GBM      <- TRUE
 
 SAVE           <- TRUE
 
-set.seed(1234)
 ```
 
 
@@ -85,7 +87,11 @@ labels_list <- list()
 
 for (dataset_name in datasets_names) {    
   cat(sprintf("\nReading dataset %s.\n\n", dataset_name))
+  
+  #----------------------------------
   source("Code/Train/read_dataset.R")
+  #----------------------------------
+  
   d           <- list(dataset_name = dataset_name, data = data)
   data_list   <- list.append(data_list, d)
   l           <- list(dataset_name = dataset_name, labels = labels)
@@ -126,6 +132,7 @@ for (i in 1:length(data_list)) {
 # Check the distributions
 
 ```{r}
+
 for (i in 1:length(data_list)) {
   data   <- data_list[[i]][["data"]]
   labels <- labels_list[[i]][["labels"]]
@@ -147,7 +154,9 @@ for (i in 1:length(data_list)) {
   
   grid.arrange(p1, p2, ncol=2)
 }
+
 ```
+
 
 # Eliminate the genes for which there is no variance
 
@@ -174,7 +183,7 @@ for (i in 1:length(data_list)) {
 
 ```{r, save_data}
 
-# The data, labels and  are saved. The variable trainRowNumbers is needed to create a test set
+# The data, labels are saved. The variable trainRowNumbers is needed to create a test set
 
 if (SAVE) {
   data_information = list(
@@ -270,6 +279,7 @@ for (i in 1:length(data_list)) {
   grid.arrange(p1, p2, ncol=2)
   
 }
+
 ```
 
 
@@ -287,7 +297,11 @@ for (i in 2:length(data_list)) {
   data2         <- data_list[[i]][["data"]]
   labels2       <- labels_list[[i]][["labels"]]
   dataset_name2 <- labels_list[[i]][["dataset_name"]]
+  
+  #--------------------------------------
   source("Code/Train/combine_datasets.R")
+  #--------------------------------------
+  
   data1         <- data                
   labels1       <- labels  
 }
@@ -356,7 +370,12 @@ if (SAVE) {
 ```
 
 
+
+
 ```{r}
+
+# This is a restart point where you can load previouslysaves results 
+
 if (FALSE) {
   
   load(file <- file.path(rdata_path, paste0("embryonic_data_and_labels.rData")))
@@ -388,6 +407,7 @@ pp_test_data  <- predict(preproc_model, test_data)
 ### Gradient Boost Machine
 
 ```{r, model_gbm}
+
 logger.info("Info: Started training gbm on combined dataset")
 tic(msg = "", quiet = TRUE)
 
@@ -552,4 +572,5 @@ p2 <- ggplot() +
 title_string <- sprintf("Combined dataset predicted with combined model data using method '%s' (%d features, PCA threshold of %2.1f)", 
                         method, features_limit, PCA_Threshold)
 grid.arrange(p1, p2, ncol=2, top = title_string)
+
 ```

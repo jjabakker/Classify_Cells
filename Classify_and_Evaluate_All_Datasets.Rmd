@@ -9,47 +9,50 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+```{r}
+# rm(list = ls())
+set.seed(1234)
+```
+
 Make sure to set the knit directory to 'project directory' (which is the directory below 'Code')
 Run command: rmarkdown::render("Caret_Predict.Rmd")
 
 
-```{r, libraries, message=FALSE}
+# Specify key use parameters
 
-rm(list = ls())
+Options are:
+  "Xin",                  "Xin",
+  "Muraro",               "Muraro",
+  "Baron_Human",          "Baron_Human",
+  "Baron_Mouse",          "Baron_Mouse",
+  "SegerStolpe",          "SegerStolpe",
+  "Zhou",                 "Zhou",
+  "Bo",                   "Bo",
+  "Petropoulos1",         "Petropoulos1"
+  
+  
+  "c_Muraro_Segerstolpe", "c_Muraro_Segerstolpe",
+  "c_Xin_Segerstolpe",    "c_Xin_Segerstolpe",
+  "c_Muraro_Xin",         "c_Muraro_Xin",
+  "c_Muraro_Segerstolpe", "SegerStolpe",
+  "c_Muraro_Segerstolpe", "Muraro",
+  "c_Muraro_Xin",         "Muraro",
+  "c_Muraro_Xin",         "Xin",
+  "c_Xin_Segerstolpe",    "Xin",
+  "c_Xin_Segerstolpe",    "Segerstolpe",
 
-library(readr)
-library(tidyverse)
-library(gridExtra)
-library(caret)
-library(matrixStats)
-library(GGally)
+  "Muraro",               "SegerStolpe",
+  "Muraro",               "Xin",
+  "SegerStolpe",          "Muraro",
+  "SegerStolpe",          "Xin",
+  "Xin",                  "Muraro",
+  "Xin",                  "SegerStolpe"
 
-```
+```{r}
 
-#  Read in the model and data
+# Specify all the pairs of datasets and models to evaluate
 
-```{r, path to set}
-
-proj_path   <- file.path(".")
-data_path   <- file.path(proj_path, "DataSets")
-log_path    <- file.path(proj_path, "Logs")
-rdata_path  <- file.path(proj_path, "rData")
-config_path <- file.path(proj_path, "config")
-
-```
-
-# Predict and analyse the result
-
-```{r, fig.width = 5}
-report_out <- data.frame(Method       = character(),
-                         ModelData    = character(),
-                         TestData     = character(),
-                         Accuracy     = numeric(),
-                         CorrAccuracy = numeric(),
-                         Confidence   = numeric())
-
-
-# Specify in the to_review tibble, all the pairs of datasets and models you want to evaluate
 to_review <- tribble(
   ~ModelData,             ~TestData,
   
@@ -61,80 +64,104 @@ to_review <- tribble(
   "Zhou",                 "Zhou",
   "Bo",                   "Bo",
   "Petropoulos1",         "Petropoulos1"
-  
-  
-  # "c_Muraro_Segerstolpe", "c_Muraro_Segerstolpe",
-  # "c_Xin_Segerstolpe",    "c_Xin_Segerstolpe",
-  # "c_Muraro_Xin",         "c_Muraro_Xin",
-
-  # "c_Muraro_Segerstolpe", "SegerStolpe",
-  # "c_Muraro_Segerstolpe", "Muraro",
-  # "c_Muraro_Xin",         "Muraro",
-  # "c_Muraro_Xin",         "Xin",
-  # "c_Xin_Segerstolpe",    "Xin",
-  # "c_Xin_Segerstolpe",    "Segerstolpe",
-
-  # "Muraro",               "SegerStolpe",
-  # "Muraro",               "Xin",
-  # "SegerStolpe",          "Muraro",
-  # "SegerStolpe",          "Xin",
-  # "Xin",                  "Muraro",
-  # "Xin",                  "SegerStolpe"
 )
 
-to_review <- rowid_to_column(to_review, "nr")
-to_review <- as.data.frame(to_review)
-to_review
-```
+# Select preprocessing
 
-```{r}
+preproc_method         <- "pp_pca"
+preproc_method         <- "pp_no_pca"
+preproc_method         <- "pp_log_pca"
 
-# Specif which models you want to run
+preproc_method         <- "pp_log_pca"
+
+# Specify which models you want to run
+
 PREDICT_SVML           <- TRUE
 PREDICT_SVMR           <- TRUE
 PREDICT_RF             <- TRUE
 PREDICT_GBM            <- TRUE
 PREDICT_GLMNET         <- FALSE
+
+```
+
+
+```{r}
+
+to_review <- rowid_to_column(to_review, "nr")
+to_review <- as.data.frame(to_review)
+to_review
+
+```
+
+# Initialise
+
+```{r, libraries, message=FALSE}
+
+library(readr)
+library(tidyverse)
+library(gridExtra)
+library(caret)
+library(matrixStats)
+library(GGally)
+
 ```
 
 
 ```{r, set preprocess options}
 
-preproc_method <- "pp_normal"
-preproc_method <- "pp_no_pca"
-preproc_method <- "pp_log_pca"
-
-preproc_method <- "pp_log_pca"
-
-if (preproc_method == "pp_normal")  {
+if (preproc_method == "pp_pca")  {
   log_preprocess   <- FALSE
-  caret_preprocess <- c('scale', 'center', 'pca')
+  caret_preprocess_method <- c('scale', 'center', 'pca')
 } else if (preproc_method == "pp_no_pca")  {
   log_preprocess   <- FALSE
-  caret_preprocess <- c('scale', 'center')
+  caret_preprocess_method <- c('scale', 'center')
 } else if (preproc_method == "pp_log_pca")  {
   log_preprocess   <- TRUE
-  caret_preprocess <- c('scale', 'center', 'pca')
+  caret_preprocess_method <- c('scale', 'center', 'pca')
 }
 
 ```
 
 
-```{r, fig.width = 5}
+```{r, path to set and report_out}
 
-set.seed(1234)
-sink(file.path(log_path,'analysis-output.txt'))
+proj_path   <- file.path(".")
+data_path   <- file.path(proj_path, "DataSets")
+log_path    <- file.path(proj_path, "Logs")
+rdata_path  <- file.path(proj_path, "rData")
+config_path <- file.path(proj_path, "config")
+
+# Initialise the report_out table
+report_out <- data.frame(Method       = character(),
+                         ModelData    = character(),
+                         TestData     = character(),
+                         Accuracy     = numeric(),
+                         CorrAccuracy = numeric(),
+                         Confidence   = numeric())
 
 # Information of all the runs will be gathered in the class_summaries list  
 class_summaries <- list()
-  
+
+```
+
+
+
+# Read and Predict 
+
+
+```{r, fig.width = 5}
+
+sink(file.path(log_path, paste0(preproc_method, "_all_classify.txt")))
+
 for (row in 1:nrow(to_review)) {
   
   # Set the data and model namde and read the data
   model_name     <- to_review[row, "ModelData"]
   dataset_name   <- to_review[row, "TestData"]
   
+  #-------------------------------------------
   source("Code/Predict/read_model_and_data.R")
+  #-------------------------------------------
   
   if (log_preprocess) {
     data <- log(1 + data)
@@ -148,8 +175,7 @@ for (row in 1:nrow(to_review)) {
     labels <- as.data.frame(labels)
   }
   
-
-  # Check if there are top genes missing o=inthe dataset, and of so provide dummy values 
+  # Check if there are top genes missing in the dataset, and of so provide dummy values 
   missing_col <- setdiff(top_genes[1:features_limit], colnames(data))
   newcol = rep.int(0,dim(data)[1])
   if (length(missing_col) > 0) {
@@ -160,7 +186,6 @@ for (row in 1:nrow(to_review)) {
   } else {
     cat(sprintf("All top %d features were present in the data set.\n", features_limit))
   }
-  
   
   if (PREDICT_SVMR && !is.null(model_svmRadial)) { 
     method <- "SVMR"
@@ -209,7 +234,9 @@ for (row in 1:nrow(to_review)) {
 }
 
 sink()
+
 ```
+# Report out
 
 ```{r, fig.width = 6}
 
@@ -218,8 +245,8 @@ print(class_summaries)
 ```
 
 
-
 ```{r, fig.width = 5}
+
 plotdata <- report_out[as.character(report_out$TestData) == as.character(report_out$ModelData),]
 ggplot(report_out) +
   geom_point(aes(x = medianF1, y = Confidence, col = TestData)) +
@@ -228,9 +255,11 @@ ggplot(report_out) +
   scale_x_continuous(limits = c(0, 1)) +
   scale_y_continuous(limits = c(0, 1)) +
   theme_light()
+
 ```
 
 ```{r, fig.width = 5}
+
 plotdata <- report_out[as.character(report_out$TestData) == as.character(report_out$ModelData),]
 ggplot(plotdata) +
   geom_point(aes(x = CorrAccuracy, y = Confidence, col = TestData)) +
@@ -239,9 +268,11 @@ ggplot(plotdata) +
   scale_y_continuous(limits = c(0, 1)) +
   theme_light() +
   labs(x = "Corrected Accuracy")
+
 ```
 
 ```{r, fig.width = 5}
+
 plotdata <- report_out[as.character(report_out$TestData) == as.character(report_out$ModelData),]
 ggplot(plotdata) +
   geom_point(aes(x = medianF1, y = Confidence, col = Method)) +
@@ -250,9 +281,11 @@ ggplot(plotdata) +
   scale_y_continuous(limits = c(0, 1)) +
   facet_wrap( ~ TestData) +
   theme_light()
+
 ```
 
 ```{r}
+
 plotdata <- report_out[report_out$TestData == report_out$ModelData,]
 ggplot(plotdata) +
   geom_point(aes(x = Accuracy, y = CorrAccuracy, col = Method)) +
@@ -262,6 +295,7 @@ ggplot(plotdata) +
   scale_y_continuous(limits = c(0, 1)) +
   ggtitle("The change in correctness when confidence limit is applied") +
   labs(y = "Corrected Accuracy")
+
 ```
 ```{r}
 
@@ -283,12 +317,14 @@ ggparcoord(plotdata,
 
 
 ```{r, fig.width = 5}
+
 # plotdata <- report_out[report_out$ModelData == "c_Muraro_Segerstolpe",]
 # ggplot(plotdata) +
 #   geom_point(aes(x = Accuracy, y = Confidence, col = TestData)) +
 #   facet_wrap( ~ Method) +
 #   ggtitle("Various data sets predicted with model based on combined Muraro-Segerstolpe") +
 #   theme_light()
+
 ```
 
 ```{r, fig.width = 5}
@@ -299,13 +335,14 @@ ggparcoord(plotdata,
 #   facet_wrap( ~ Method) +
 #   ggtitle("Various data sets predicted with model based on combined Muraro-Xin") +
 #   theme_light()
+
 ```
 
 
 
-# Generate the results table 
+## Generate the results table 
 
-## First check for missing items
+### First check for missing items
 
 ```{r}
 
@@ -332,14 +369,16 @@ for (i in 1:length(d)) {
 } 
 
 
-report_out1 <- report_out %>% 
+report_out <- report_out %>% 
   arrange(TestData, Method)
 
 ```
 
-## With median F1
+
+### With median F1
 
 ```{r}
+
 report_out
 
 ro <- report_out %>%
@@ -352,6 +391,8 @@ ro1 <- ro %>%
   select(medianF1) 
 colnames(ro1) <- d[1]
 
+# For now this only worlks, when you have at least two dataset
+
 for (i in 2:length(d)) {
   ro2 <- ro %>%
     filter(TestData == d[i]) %>%
@@ -362,61 +403,112 @@ for (i in 2:length(d)) {
 rownames(ro1) = unique(ro$Method)
 
 ro1
+
 ```
 
 
-## With mean F1
+```{r}
+
+# To create the plot table you need to run this script three times changing the preproc_method
+# At the start of the cyle delete combined_plot_data if it ecists
+
+plot_data <- report_out %>%
+  select(Method, TestData, medianF1) 
+plot_data$PreProc <- preproc_method
+plot_data <- plot_data %>%
+  select(Method, TestData, PreProc, medianF1)
+if (exists("combined_plot_data")) {
+  combined_plot_data <- rbind(combined_plot_data, plot_data)
+} else {
+  combined_plot_data <- plot_data
+}
+
+if (FALSE) {
+  save(combined_plot_data, file = file.path(rdata_path, "combined_plot.rData"))
+}
+```
+
 
 ```{r}
-report_out
 
-ro <- report_out %>%
-  select(Method, TestData, meanF1)
+colr <- RColorBrewer::brewer.pal(9, "GnBu")
+cpd  <- combined_plot_data
 
-d <- unique(ro$TestData)
+cpd <- cpd %>%
+  mutate (PreProc  = replace(PreProc, PreProc == "pp_no_pca" , "No PCA")) %>%
+  mutate (PreProc  = replace(PreProc, PreProc == "pp_pca" ,    "Just PCA")) %>%  
+  mutate (PreProc  = replace(PreProc, PreProc == "pp_log_pca", "Log and PCA"))
+    
+ggplot(cpd, aes(x = Method, y = medianF1, fill = as.factor(Method))) +
+  geom_bar(stat= "identity", width = 0.3) +
+  facet_grid(vars(TestData), vars(PreProc)) +
+  scale_fill_manual(values = c(colr[2], colr[4], colr[6], colr[7]) ) +
+  ylim(0, 1) +
+  ylab("Median F1") +
+  theme_light() +
+  theme(legend.title=element_blank()) 
+```
 
-ro1 <- ro %>%
-  filter(TestData == d[1]) %>%
-  select(meanF1) 
-colnames(ro1) <- d[1]
+### With mean F1
 
-for (i in 2:length(d)) {
-  ro2 <- ro %>%
-    filter(TestData == d[i]) %>%
+```{r}
+
+if (FALSE) {
+  report_out
+  
+  ro <- report_out %>%
+    select(Method, TestData, meanF1)
+  
+  d <- unique(ro$TestData)
+  
+  ro1 <- ro %>%
+    filter(TestData == d[1]) %>%
     select(meanF1) 
-  colnames(ro2) <- d[i]
-  ro1 <- cbind(ro1, ro2)
+  colnames(ro1) <- d[1]
+  
+  for (i in 2:length(d)) {
+    ro2 <- ro %>%
+      filter(TestData == d[i]) %>%
+      select(meanF1) 
+    colnames(ro2) <- d[i]
+    ro1 <- cbind(ro1, ro2)
+  }
+  rownames(ro1) = unique(ro$Method)
+  
+  ro1
 }
-rownames(ro1) = unique(ro$Method)
 
-ro1
 ```
 
 
-## With accuracy
+### With accuracy
 
 ```{r}
-report_out
 
-ro <- report_out %>%
-  select(Method, TestData, Accuracy)
-
-d <- unique(ro$TestData)
-
-ro1 <- ro %>%
-  filter(TestData == d[1]) %>%
-  select(Accuracy) 
-colnames(ro1) <- d[1]
-
-for (i in 2:length(d)) {
-  ro2 <- ro %>%
-    filter(TestData == d[i]) %>%
+if (FALSE) {
+  report_out
+  
+  ro <- report_out %>%
+    select(Method, TestData, Accuracy)
+  
+  d <- unique(ro$TestData)
+  
+  ro1 <- ro %>%
+    filter(TestData == d[1]) %>%
     select(Accuracy) 
-  colnames(ro2) <- d[i]
-  ro1 <- cbind(ro1, ro2)
+  colnames(ro1) <- d[1]
+  
+  for (i in 2:length(d)) {
+    ro2 <- ro %>%
+      filter(TestData == d[i]) %>%
+      select(Accuracy) 
+    colnames(ro2) <- d[i]
+    ro1 <- cbind(ro1, ro2)
+  }
+  rownames(ro1) = unique(ro$Method)
+  
+  ro1
 }
-rownames(ro1) = unique(ro$Method)
 
-ro1
 ```
 

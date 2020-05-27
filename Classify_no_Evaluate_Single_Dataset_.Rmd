@@ -9,25 +9,39 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Make sure to set the knit directory to 'project directory' (which is Testbench_Seurat')
-Run command: rmarkdown::render("Caret_Predict.Rmd")
 
-
-```{r, libraries, message=FALSE}
-
-library(readr)
-library(tidyverse)
-library(gridExtra)
-library(caret)
-library(matrixStats)
-
+```{r}
 rm(list = ls())
 ```
 
-#  Read in the model and data
 
-  
-```{r, Model names}
+# Specify key use parameters
+
+Model and datset options are:
+
+"Baron_Mouse"
+"Segerstolpe"
+"Muraro"
+"Xin"
+"c_Muraro_Segerstolpe"
+"c_Xin_Segerstolpe"
+"Zhou"
+
+```{r}
+
+# Select dataset and model
+
+dataset_name <- "Baron_Mouse"
+model_name   <- "Baron_Mouse"
+
+# Select preprocessing
+
+preproc_method   <- "pp_no_pca"
+preproc_method   <- "pp_log_pca"
+preproc_method   <- "pp_pca"
+
+# Specify which models should be run
+# Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
 
 PREDICT_SVML    <- TRUE
 PREDICT_SVMR    <- TRUE
@@ -38,8 +52,34 @@ PREDICT_GLMNET  <- TRUE
 
 ```
 
+# Initialise
 
-## Initialise
+```{r, libraries, message=FALSE}
+
+library(readr)
+library(tidyverse)
+library(gridExtra)
+library(caret)
+library(matrixStats)
+
+```
+
+
+```{r, preprocess options}
+
+if (preproc_method == "pp_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess_method <- c('scale', 'center', 'pca')
+} else if (preproc_method == "pp_no_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess_method <- c('scale', 'center')
+} else if (preproc_method == "pp_log_pca")  {
+  log_preprocess   <- TRUE
+  caret_preprocess_method <- c('scale', 'center', 'pca')
+}
+
+```
+
 
 ```{r, Initialise}
 
@@ -61,37 +101,31 @@ class_summaries <- list()
 ```
 
 
-## Read the model and Data
-
-"Baron_Mouse"
-"Segerstolpe"
-"Muraro"
-"Xin"
-"c_Muraro_Segerstolpe"
-"c_Xin_Segerstolpe"
-"Zhou"
-
+# Read the model and Data
 
 ```{r, read model and data .rData files}
 
-dataset_name <- "Baron_Mouse"
-model_name   <- "Baron_Mouse"
-
+#-------------------------------------------
 source("Code/Predict/read_model_and_data.R")
+#-------------------------------------------
 
 # if the dataset to be predicted is the same as the dataset the model was generated with, split of the test data
-if (model_name == dataset_name) {
-  data   <- data[-trainRowNumbers,]
-  labels <- labels[-trainRowNumbers,]
-  labels <- as.data.frame(labels)
+# if (model_name == dataset_name) {
+#   data   <- data[-trainRowNumbers,]
+#   labels <- labels[-trainRowNumbers,]
+#   labels <- as.data.frame(labels)
+# }
+
+if (log_preprocess) {
+  data <- log(1 + data)
 }
-  
+
 ```
 
 
 ```{r}
 
-# If there genes missing in the data set, add columns for these genes with expession count 0
+# If there are genes missing in the data set, add columns for these genes with expession count 0
 # If the number of columns becomes high, the accuracy of classification is affected 
 
 missing_col <- setdiff(top_genes[1:features_limit], colnames(data))
@@ -124,7 +158,10 @@ if (PREDICT_SVMR && !is.null(model_svmRadial)) {
   predicted_classes <- predict(model_svmRadial, pp_data)
   probability       <- predict(model_svmRadial, pp_data, type = "prob")
   
+  #---------------------------------------
   source("Code/Predict/display_results.R") 
+  #---------------------------------------
+  
   plot_result
 }
 
@@ -142,7 +179,10 @@ if (PREDICT_SVML && !is.null(model_svmLinear)) {
   predicted_classes <- predict(model_svmLinear, pp_data)
   probability       <- predict(model_svmLinear, pp_data, type = "prob")
   
+  #---------------------------------------
   source("Code/Predict/display_results.R") 
+  #---------------------------------------
+  
   plot_result
 }
 
@@ -159,7 +199,10 @@ if (PREDICT_RF && !is.null(model_rf)) {
   predicted_classes <- predict(model_rf, pp_data)
   probability       <- predict(model_rf, pp_data, type = "prob")
   
+  #---------------------------------------
   source("Code/Predict/display_results.R") 
+  #---------------------------------------
+  
   plot_result
 }
 ```
@@ -192,7 +235,10 @@ if (PREDICT_GBM_NP && !is.null(model_gbm_np)) {
   predicted_classes <- predict(model_gbm_np, data)
   probability       <- predict(model_gbm_np, data, type = "prob")
   
+  #---------------------------------------
   source("Code/Predict/display_results.R") 
+  #---------------------------------------
+  
   plot_result
   
 }
@@ -210,7 +256,10 @@ if (PREDICT_GLMNET && !is.null(model_glmnet)) {
   predicted_classes <- predict(model_glmnet, data)
   probability       <- predict(model_glmnet, data, type = "prob")
   
+  #---------------------------------------
   source("Code/Predict/display_results.R") 
+  #---------------------------------------
+  
   plot_result
   
 }

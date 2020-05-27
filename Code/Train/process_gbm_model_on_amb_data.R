@@ -47,7 +47,6 @@ model_gbm    <- NULL
 gbm_accuracy <- 0
 method       <- "gbm"  
 
-
 # Limit the data set to the number of genes specified in 'features_limit' (1000 has been found to be a good choice)
 genes_to_keep      <- intersect(top_genes[1:features_limit], colnames(data))
 ldata              <- as.data.frame(data[ , genes_to_keep])
@@ -67,7 +66,7 @@ colnames(train_data)[1] <- "ident"
 # end fix
 
 preproc_model <- preProcess(train_data, 
-                            method  = c('scale', 'center', 'pca'),
+                            method  = caret_preprocess_method,
                             thresh  = PCA_Threshold,
                             verbose = TRUE)
 
@@ -81,25 +80,23 @@ model_gbm     <- train(ident ~ .,
                                                 classProbs = TRUE,
                                                 verboseIter = TRUE)) 
 
-
 ###########################################################################
 # Predict and Evaluate
 ###########################################################################
 
 # A few interface variables need to be set in order to be able to call evaluate.R
 
-model_name  <- dataset_name
-model       <- model_gbm
-labels      <- test_data[,1:2]
-data        <- test_data
+model_name     <- dataset_name
+model          <- model_gbm
+labels         <- test_data[,1:2]
+data           <- test_data
 
 
-preproc_method <- "pp_normal"
+preproc_method <- "pp_pca"
 
 #-------------------------------------------------
 source("Code/Predict/predict_model_with_labels.R")
 #-------------------------------------------------
-
 
 cat(sprintf("Percentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
             min_prob_value,

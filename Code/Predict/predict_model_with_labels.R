@@ -13,7 +13,10 @@ Preprocessing still needs to be done on the data
 # Do the actual predicting
 ######################################################################################################################
 
+# First preprocess
 pp_data           <- predict(preproc_model, data)
+
+# Then predict
 predicted_classes <- predict(model, pp_data)
 probability       <- predict(model, pp_data, type = "prob")
 
@@ -189,16 +192,13 @@ print(cm)
 # Calculate median F1
 ######################################################################################################################
 
-if (is_null(dim(cm[["byClass"]]))) {
-  F1_1         <- cm[["byClass"]][c("Precision","Recall")]
-  F1_2         <- F1_1[complete.cases(F1_1)]
+F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
+F1_2         <- F1_1[complete.cases(F1_1),]
+if  (class(F1_2) == "numeric") {
   F1_3         <- 2 * (F1_2["Precision"] * F1_2["Recall"]) / (F1_2["Precision"] + F1_2["Recall"])
 } else {
-  F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
-  F1_2         <- F1_1[complete.cases(F1_1),]
   F1_3         <- 2 * (F1_2[ , "Precision"] * F1_2[ , "Recall"]) / (F1_2[ ,"Precision"] + F1_2[ ,"Recall"])
 }
-
 medianF1     <- median(F1_3, na.rm = TRUE)
 meanF1       <- mean(F1_3, na.rm = TRUE)
 

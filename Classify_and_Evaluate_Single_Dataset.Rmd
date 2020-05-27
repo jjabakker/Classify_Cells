@@ -9,9 +9,57 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+```{r}
+rm(list = ls())
+set.seed (1234)
+```
+
+
 Make sure to set the knit directory to 'project directory' (which is Testbench_Seurat')
 Run command: rmarkdown::render("Caret_Predict.Rmd")
 
+# Specify key use parameters
+
+Model and datset options are:
+
+"Baron_Mouse"
+"Segerstolpe"
+"Muraro"
+"Xin"
+"c_Muraro_Segerstolpe"
+"c_Xin_Segerstolpe"
+"Zhou"
+"Bo"
+"Petropoulos1"
+
+
+```{r}
+
+# Select dataset and model
+
+dataset_name   <- "Bo"
+model_name     <- "Bo"
+
+# Select preprocessing
+
+preproc_method   <- "pp_no_pca"
+preproc_method   <- "pp_log_pca"
+preproc_method   <- "pp_pca"
+
+# Specify which models should be run
+# Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
+
+PREDICT_SVML     <- TRUE
+PREDICT_SVMR     <- TRUE
+PREDICT_RF       <- TRUE
+PREDICT_GBM      <- TRUE 
+PREDICT_GLMNET   <- FALSE 
+
+```
+
+
+# Initialise
 
 ```{r, libraries, message=FALSE}
 
@@ -21,30 +69,10 @@ library(gridExtra)
 library(caret)
 library(matrixStats)
 
-rm(list = ls())
-
-```
-
-#  Read in the model and data
-
-  
-```{r, Model names}
-
-# The flags are uses to specify which models should be run
-# Note that it possible that a model is not available in the modelset, in which case the instructiin is simply ignored
-
-PREDICT_SVML            <- TRUE
-PREDICT_SVMR            <- TRUE
-PREDICT_RF              <- TRUE
-PREDICT_GBM             <- TRUE 
-PREDICT_GLMNET          <- FALSE 
-
 ```
 
 
-## Initialise
-
-```{r, Initialise}
+```{r, general initialisation}
 
 # Set directory paths  
 proj_path   <- file.path(".")
@@ -63,54 +91,33 @@ report_out <- data.frame(Method     = character(),
 # Information of all the runs will be gathered in the class_summaries list  
 class_summaries <- list()
 
-
-set.seed (1234)
-
 ```
 
 
-```{r, set preprocess options}
+```{r, preprocess options}
 
-preproc_method <- "pp_normal"
-preproc_method <- "pp_no_pca"
-preproc_method <- "pp_log_pca"
-
-preproc_method <- "pp_no_pca"
-
-if (preproc_method == "pp_normal")  {
+if (preproc_method == "pp_pca")  {
   log_preprocess   <- FALSE
-  caret_preprocess <- c('scale', 'center', 'pca')
+  caret_preprocess_method <- c('scale', 'center', 'pca')
 } else if (preproc_method == "pp_no_pca")  {
   log_preprocess   <- FALSE
-  caret_preprocess <- c('scale', 'center')
+  caret_preprocess_method <- c('scale', 'center')
 } else if (preproc_method == "pp_log_pca")  {
   log_preprocess   <- TRUE
-  caret_preprocess <- c('scale', 'center', 'pca')
+  caret_preprocess_method <- c('scale', 'center', 'pca')
 }
 
 ```
 
-## Read the model and Data
-
-"Baron_Mouse"
-"Segerstolpe"
-"Muraro"
-"Xin"
-"c_Muraro_Segerstolpe"
-"c_Xin_Segerstolpe"
-"Zhou"
-"Bo"
-"Petropoulos1"
-"Petropoulos2"
 
 
+#  Read in the model and data
 
 ```{r, read model and data .rData files}
 
-dataset_name   <- "Bo"
-model_name     <- "Bo"
-
+#-------------------------------------------
 source("Code/Predict/read_model_and_data.R")
+#-------------------------------------------
 
 # In case the model and data set are the same, you do not want to predict on the whole dataset, but only on the part
 # that was not used for training. In that case eliminate the training records,
@@ -166,6 +173,7 @@ if (PREDICT_SVMR && !is.null(model_svmRadial)) {
 
 ```
 
+## Predict svmLinear
 
 ```{r, Predict_svmLinear, fig.width = 6}
 
@@ -183,6 +191,8 @@ if (PREDICT_SVML && !is.null(model_svmLinear)) {
 ```
 
 
+## Predict RFl
+
 ```{r, Predict_RF, fig.width = 6}
 
 if (PREDICT_RF && !is.null(model_rf)) { 
@@ -199,6 +209,8 @@ if (PREDICT_RF && !is.null(model_rf)) {
 ```
 
 
+## Predict GBM
+
 ```{r, Predict_GBM, fig.width = 6}
 
 if (PREDICT_GBM && !is.null(model_gbm)) { 
@@ -214,6 +226,7 @@ if (PREDICT_GBM && !is.null(model_gbm)) {
 
 ```
 
+## Predict GLMN
 
 ```{r, Predict_GLMNET, fig.width = 6}
 
@@ -231,6 +244,8 @@ if (PREDICT_GLMNET && !is.null(model_glmnet)) {
 ```
 
 
+# Generate the results table 
+
 ```{r, fig.width = 6}
 print(class_summaries)
 print(report_out)
@@ -247,10 +262,6 @@ ggplot(report_out) +
 ```
 
 
-# Generate the results table 
-
-
-## With median F1
 
 ```{r}
 ro <- report_out %>%

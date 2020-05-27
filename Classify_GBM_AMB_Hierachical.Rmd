@@ -10,9 +10,15 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-```{r, libraries, message=FALSE}
-
+```{r}
 rm(list = ls())
+set.seed(1234)
+```
+
+
+# Set key use parameters
+
+```{r, libraries, message=FALSE}
 
 library(readr)
 library(tibble)
@@ -206,14 +212,15 @@ tic.clearlog()
 
 ```{r, Class Selection}
 
-set.seed(1234)
-
 # Start timer
 logger.info("Info: Started Class level")
 tic(msg = "", quiet = TRUE)
 
 classification_category <- "Class"
+
+#---------------------------------------------------
 source("Code/Train/process_gbm_model_on_amb_data.R")
+#---------------------------------------------------
 
 model_info = list(
   p1            = p1,
@@ -275,8 +282,6 @@ labels_to_be_used <- list(
 
 ```{r, Subclass Selection}
 
-set.seed(1234)
-
 for (m in class_models_to_train) {
   # Start timer
   log_string <- sprintf("Info: Started training %s Subclass levels", m)
@@ -287,7 +292,9 @@ for (m in class_models_to_train) {
   data                             <- data_to_be_used[[m]]
   labels                           <- labels_to_be_used[[m]]
   
+  #---------------------------------------------------
   source("Code/Train/process_gbm_model_on_amb_data.R")
+  #---------------------------------------------------
   
   model_info <- list(
     p1            = p1,
@@ -382,8 +389,6 @@ gabaergic_labels_list <- list(
 
 for (m in gabaergic_subclass_list) {
   
-  set.seed(1234)
-  
   # Start timer
   logger.info("Info: Started training %s cluster level, m")
   tic(msg = "", quiet = TRUE)
@@ -391,7 +396,10 @@ for (m in gabaergic_subclass_list) {
   classification_category  <- "cluster"
   data                     <- gabaergic_data_list[[m]]
   labels                   <- gabaergic_labels_list[[m]]
+  
+  #---------------------------------------------------
   source("Code/Train/process_gbm_model_on_amb_data.R")
+  #---------------------------------------------------
   
   model_info = list(
     p1            = p1,
@@ -499,8 +507,6 @@ glutamatergic_labels_list <- list(
 
 for (m in glutamatergic_subclass_list) {
   
-  set.seed(1234)
-  
   # Start timer
   logger.info("Info: Started training %s cluster level, m")
   tic(msg = "", quiet = TRUE)
@@ -508,7 +514,10 @@ for (m in glutamatergic_subclass_list) {
   classification_category  <- "cluster"
   data                     <- glutamatergic_data_list[[m]]
   labels                   <- glutamatergic_labels_list[[m]]
+  
+  #---------------------------------------------------
   source("Code/Train/process_gbm_model_on_amb_data.R")
+  #---------------------------------------------------
   
   model_info = list(
     p1            = p1,

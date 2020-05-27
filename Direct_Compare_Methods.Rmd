@@ -10,9 +10,51 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-```{r, libraries, message=FALSE}
-
+```{r}
 rm(list = ls())
+set.seed(1234)
+```
+
+
+# Specify key use parameters
+
+Dataset options are:
+
+"Baron_Mouse",  1,886 cells, 14,861 genes
+"Baron_Human",  8,569 cells, 17,499 genes
+"Muraro",       2,122 cells, 18,915 genes  
+"SegerStolpe",  2,133 cells, 22,757 genes
+"Xin",          1,419 cells, 33,889 genes
+"Zhou"
+"Bo"
+"Petropoulos1"
+"Petropoulos2"
+
+```{r}
+
+# Select dataset and model
+
+dataset_name     <- "Bo"
+
+# Select preprocessing
+
+preproc_method   <- "pp_no_pca"
+preproc_method   <- "pp_log_pca"
+preproc_method   <- "pp_pca"
+
+# Specify which models should be run
+# Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
+
+TRAIN_SVML      <- FALSE
+TRAIN_GBM       <- TRUE
+TRAIN_GLMNET    <- FALSE
+
+```
+
+
+# Initialise
+
+```{r, libraries, message=FALSE}
 
 library(readr)
 library(tibble)
@@ -30,7 +72,7 @@ library(MazamaCoreUtils)        # Used for logging messages to a file
 ```
 
 
-```{r, initialise, message=FALSE}
+```{r, general initialise, message=FALSE}
 
 PCA_Threshold   <- 0.90         # The percentage variance explained by the PCA
                                 # A high percentage requires more PC dimensions to be considered
@@ -43,10 +85,6 @@ SEURAT_VERBOSE  <- FALSE
 VARIABLE_GENES  <- TRUE
 LOGGER          <- FALSE
 
-TRAIN_SVML      <- FALSE
-TRAIN_GBM       <- TRUE
-TRAIN_GLMNET    <- FALSE
-
 # Summary results will be kept here 
 report_out <- data.frame(Method     = character(),
                          ModelData  = character(),
@@ -57,38 +95,46 @@ report_out <- data.frame(Method     = character(),
 # Information of all the runs will be gathered in the class_summaries list  
 class_summaries <- list()
 
-```
-
-
-# Read in the data
-
-"Baron_Mouse",  1,886 cells, 14,861 genes
-"Baron_Human",  8,569 cells, 17,499 genes
-"Muraro",       2,122 cells, 18,915 genes  
-"SegerStolpe",  2,133 cells, 22,757 genes
-"Xin",          1,419 cells, 33,889 genes
-"Zhou"
-"Bo"
-"Petropoulos1"
-"Petropoulos2"
-
-```{r, Read}
-
-dataset_name     <- "Test"
-
-preproc_method   <- "pp_normal"
-#preproc_method <- "pp_normal"
-#preproc_method <- "pp_no_pca"
-
+# Paths
 proj_path   <- file.path(".")
 data_path   <- file.path(proj_path, "DataSets")
 log_path    <- file.path(proj_path, "Logs")
 rdata_path  <- file.path(proj_path, "rData")
 config_path <- file.path(proj_path, "config")
 
+#Logging and timer
 logger.setup (infoLog = file.path(log_path, paste0(dataset_name, "_model_compare.log")))
 
+```
+
+
+```{r, preprocess options}
+
+if (preproc_method == "pp_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess_method <- c('scale', 'center', 'pca')
+} else if (preproc_method == "pp_no_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess_method <- c('scale', 'center')
+} else if (preproc_method == "pp_log_pca")  {
+  log_preprocess   <- TRUE
+  caret_preprocess_method <- c('scale', 'center', 'pca')
+}
+
+```
+
+
+# Read in the data
+
+```{r, Read}
+
+#----------------------------------
 source("Code/Train/read_dataset.R")
+#----------------------------------
+
+if (log_preprocess) {
+  data <- log(1 + data)
+}
 
 # Remove small classes
 min_class_size      <- 10
@@ -171,7 +217,10 @@ if (VARIABLE_GENES) {
     
     cluster_resolution = 0.5
     
+    #-------------------------------------
     source("Code/Train/seurat_analysis.R")
+    #-------------------------------------
+    
     FeatureScatter(seurat_object, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") + NoLegend()
     VlnPlot(seurat_object, features = c("nFeature_RNA", "nCount_RNA"), ncol = 2)
     DimPlot(seurat_object, reduction = 'pca')
@@ -205,9 +254,7 @@ save_labels <- labels
 ```{r, svm_Linear, fig.width = 5}
   
 if (TRAIN_SVML) {
-  
-  set.seed(1234)
-  
+    
   data   <- save_data
   labels <- save_labels
   method <- "svmLinear"
@@ -224,26 +271,10 @@ if (TRAIN_SVML) {
   train_data         <- ldata[trainRowNumbers,]
   test_data          <- ldata[-trainRowNumbers,]
 
-  
-  if (preproc_method == "pp_normal") {
-    preproc_model <- preProcess(train_data, 
-                                method  = c('scale', 'center', 'pca'),
-                                thresh  = PCA_Threshold,
-                                verbose = TRUE)
-    cat(sprintf("\n\nAfter PCA there are %d Principle Components\n\n", dim(preproc_model$rotation)[2]))
-  } else if (preproc_method == "pp_no_pca") {
-    preproc_model <- preProcess(train_data, 
-                                method  = c('scale', 'center'),
-                                verbose = TRUE)
-  } else if (preproc_method == "pp_log_pca") {
-    data <- log(1 + data)
-    preproc_model <- preProcess(train_data, 
-                                method  = c('scale', 'center', 'pca'),
-                                thresh  = PCA_Threshold,
-                                verbose = TRUE)
-  } else { 
-    stop("No valid preprocess mode")
-  }
+  preproc_model      <- preProcess(train_data, 
+                                   method  = caret_preprocess_method,
+                                   thresh  = PCA_Threshold,
+                                   verbose = TRUE)
   
   pp_train_data <- predict(preproc_model, train_data)
  
@@ -312,12 +343,11 @@ if (TRAIN_SVML) {
 
 
 ```{r, gbm, , fig.width = 5}
+
 model_gbm    <- NULL
 gbm_accuracy <- 0
   
 if (TRAIN_GBM) {
-  
-  set.seed(1234)
   
   data   <- save_data
   labels <- save_labels
@@ -332,26 +362,11 @@ if (TRAIN_GBM) {
   
   train_data <- ldata[trainRowNumbers,]
   test_data  <- ldata[-trainRowNumbers,]
-  
-  if (preproc_method == "pp_normal") {
-    preproc_model <- preProcess(train_data, 
-                                method  = c('scale', 'center', 'pca'),
-                                thresh  = PCA_Threshold,
-                                verbose = TRUE)
-    cat(sprintf("\n\nAfter PCA there are %d Principle Components\n\n", dim(preproc_model$rotation)[2]))
-  } else if (preproc_method == "pp_no_pca") {
-    preproc_model <- preProcess(train_data, 
-                                method  = c('scale', 'center'),
-                                verbose = TRUE)
-  } else if (preproc_method == "pp_log_pca") {
-    traindata <- log(1 + traindata)
-    preproc_model <- preProcess(train_data, 
-                                method  = c('scale', 'center', 'pca'),
-                                thresh  = PCA_Threshold,
-                                verbose = TRUE)
-  } else { 
-    stop("No valid preprocess mode")
-  }
+
+  preproc_model      <- preProcess(train_data, 
+                                   method  = caret_preprocess_method,
+                                   thresh  = PCA_Threshold,
+                                   verbose = TRUE)
   
   pp_train_data <- predict(preproc_model, train_data)
 
@@ -397,8 +412,8 @@ if (TRAIN_GBM) {
   F1_3         <- 2 * (F1_2[,"Precision"] * F1_2[,"Recall"]) / (F1_2[,"Precision"] + F1_2[,"Recall"])
   gbm_F1       <- median(F1_3, na.rm = TRUE)
   knitr::kable(class_summary, digits = 3, caption = "Class Summary overview")
- 
 }
+
 ```
 
 
@@ -407,8 +422,6 @@ if (TRAIN_GBM) {
 ```{r, glmnet , fig.width = 5}
 
 if (TRAIN_GLMNET) {
-  
-  set.seed(1234)
   
   data   <- save_data
   labels <- save_labels
@@ -431,25 +444,10 @@ if (TRAIN_GLMNET) {
   train_data         <- ldata[trainRowNumbers,]
   test_data          <- ldata[-trainRowNumbers,]
 
-    if (preproc_method == "pp_normal") {
-    preproc_model <- preProcess(train_data, 
-                                method  = c('scale', 'center', 'pca'),
-                                thresh  = PCA_Threshold,
-                                verbose = TRUE)
-    cat(sprintf("\n\nAfter PCA there are %d Principle Components\n\n", dim(preproc_model$rotation)[2]))
-  } else if (preproc_method == "pp_no_pca") {
-    preproc_model <- preProcess(train_data, 
-                                method  = c('scale', 'center'),
-                                verbose = TRUE)
-  } else if (preproc_method == "pp_log_pca") {
-    data <- log(1 + data)
-    preproc_model <- preProcess(train_data, 
-                                method  = c('scale', 'center', 'pca'),
-                                thresh  = PCA_Threshold,
-                                verbose = TRUE)
-  } else { 
-    stop("No valid preprocess mode")
-  }
+  preproc_model      <- preProcess(train_data, 
+                                   method  = caret_preprocess_method,
+                                   thresh  = PCA_Threshold,
+                                   verbose = TRUE)
   
   pp_train_data <- predict(preproc_model, train_data)
   
@@ -478,9 +476,9 @@ if (TRAIN_GLMNET) {
   labels      <- test_data[,1:2]
   data        <- test_data
   
-  #--------------------------------------------------------------------------
+  #-------------------------------------------------
   source("Code/Predict/predict_model_with_labels.r")
-  #--------------------------------------------------------------------------
+  #-------------------------------------------------
   
   cat(sprintf("\nPercentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
               min_prob_value,

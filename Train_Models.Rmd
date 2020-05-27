@@ -10,9 +10,53 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-```{r, libraries, message=FALSE}
-
+```{r}
 rm(list = ls())
+set.seed(1234)
+```
+
+# Specify key use parameters
+
+Model options:
+Baron_Mouse,  1,886 cells, 14,861 genes
+Baron_Human,  8,569 cells, 17,499 genes
+Muraro,       2,122 cells, 18,915 genes  
+SegerStolpe,  2,133 cells, 22,757 genes
+Xin,          1,419 cells, 33,889 genes
+Zhou
+Bo
+Petropoulos1
+Petropoulos2
+NULL
+
+```{r}
+
+# Specify  which model to train
+dataset_name <- "Zhou"
+
+# Select preprocessing
+
+preproc_method <- "pp_pca"
+preproc_method <- "pp_no_pca"
+preproc_method <- "pp_log_pca"
+
+preproc_method <- "pp_pca"
+
+# Specify which models should be run
+# Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
+
+TRAIN_SVML     <- TRUE
+TRAIN_SVMR     <- TRUE
+TRAIN_RF       <- TRUE
+TRAIN_GBM      <- TRUE
+TRAIN_GLMNET   <- FALSE
+
+```
+
+
+# Initialise 
+
+```{r, libraries, message=FALSE}
 
 library(readr)
 library(tibble)
@@ -30,8 +74,7 @@ library(MazamaCoreUtils)        # Used for logging messages to a file
 ```
 
 
-```{r}
-
+```{r, General initialisation}
 PCA_Threshold  <- 0.90          # The percentage variance explained by the PCA
                                 # A high percentage requires more PC dimensions to be considered
 
@@ -42,24 +85,14 @@ features_limit <- 1000          # The number of features that will be considered
 #   TRAIN_GLMNET seems to bring the computer to its knees, especially wgen wroting the results. 
 #   Better to run Direct_Compare_Models where nothing is written 
 
-TRAIN_SVML     <- TRUE
-TRAIN_SVMR     <- TRUE
-TRAIN_RF       <- TRUE
-TRAIN_GBM      <- TRUE
-TRAIN_GLMNET   <- FALSE
-
 SAVE           <- TRUE
 
 
-preproc_method <- "pp_normal"
-preproc_method <- "pp_no_pca"
-preproc_method <- "pp_log_pca"
-
-set.seed(1234)
 ```
 
 
-```{r}
+```{r, Median}
+
 calcMedianF1 <- function(cm) {
   if (is_null(dim(cm[["byClass"]]))) {
     F1_1         <- cm[["byClass"]][c("Precision","Recall")]
@@ -70,42 +103,24 @@ calcMedianF1 <- function(cm) {
     F1_2         <- F1_1[complete.cases(F1_1),]
     F1_3         <- 2 * (F1_2[ , "Precision"] * F1_2[ , "Recall"]) / (F1_2[ ,"Precision"] + F1_2[ ,"Recall"])
   }
+  medianF1 = median(F1_3, na.rm = TRUE)
   return(medianF1)
 }
-```
-
-# Read in the data
-
-## Choose the data set you want to process
-
-Baron_Mouse,  1,886 cells, 14,861 genes
-Baron_Human,  8,569 cells, 17,499 genes
-Muraro,       2,122 cells, 18,915 genes  
-SegerStolpe,  2,133 cells, 22,757 genes
-Xin,          1,419 cells, 33,889 genes
-Zhou
-Bo
-Petropoulos1
-Petropoulos2
-NULL
-
-
-```{r, select datasets}
-
-# Here you determine which model to train
-dataset_name <- "Baron_Human"
 
 ```
 
 
-```{r, initialise}
-
+```{r, path}
 # Set directory paths  
 proj_path   <- file.path(".")
 data_path   <- file.path(proj_path, "DataSets")
 log_path    <- file.path(proj_path, "Logs")
 rdata_path  <- file.path(proj_path, "rData")
 config_path <- file.path(proj_path, "config")
+```
+
+
+```{r, timer}
 
 # Initialise logging and timer
 logger.setup (infoLog = file.path(log_path, paste0(dataset_name, "_", 
@@ -116,23 +131,38 @@ tic.clearlog()
 ```
 
 
-## First dataset
+```{r, preprocess options}
 
-Read the first data set 
-The name of the dataset is specified in 'dataset_name'
-The 'function' read_dataset returns two dataframes: data and labels 
-
-```{r, read first dataset}
-
-source("Code/Train/read_dataset.R")
+if (preproc_method == "pp_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess_method <- c('scale', 'center', 'pca')
+} else if (preproc_method == "pp_no_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess_method <- c('scale', 'center')
+} else if (preproc_method == "pp_log_pca")  {
+  log_preprocess   <- TRUE
+  caret_preprocess_method <- c('scale', 'center', 'pca')
+}
 
 ```
 
 
-```{r}
+# Read in the data and process
+
+## Read file
+
+```{r, read dataset}
+
+#----------------------------------
+source("Code/Train/read_dataset.R")
+#----------------------------------
 
 saved_data   <- data
 saved_labels <- labels 
+
+if (log_preprocess) {
+  data <- log(1 + data)
+}
 
 ```
 
@@ -152,7 +182,9 @@ In a configuration file a set parameters are read in:
 
 ```{r}
 
+#------------------------------------
 source("Code/Train/process_config.R")
+#------------------------------------
 
 ```
 
@@ -204,8 +236,9 @@ You can choose not to run this. It does not affext the training.
 
 ```{r, seurat_analysis, fig.height=5,}
 
+#-------------------------------------
 source("Code/Train/seurat_analysis.R")
-
+#-------------------------------------
 
 FeatureScatter(seurat_object, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") + NoLegend()
 VlnPlot(seurat_object, features = c("nFeature_RNA", "nCount_RNA"), ncol = 2)
@@ -288,30 +321,15 @@ if (dim(train_data)[2] != ngenes) {
 ```
 
 
-
 ## Preprocess
 
 ```{r, prepocess}
 
-if (preproc_method == "pp_normal") {
-  preproc_model <- preProcess(train_data, 
-                              method  = c('scale', 'center', 'pca'),
-                              thresh  = PCA_Threshold,
-                              verbose = TRUE)
-  cat(sprintf("\n\nAfter PCA there are %d Principle Components\n\n", dim(preproc_model$rotation)[2]))
-} else if (preproc_method == "pp_no_pca") {
-  preproc_model <- preProcess(train_data, 
-                              method  = c('scale', 'center'),
-                              verbose = TRUE)
-} else if (preproc_method == "pp_log_pca") {
-  data <- log(1 + data)
-  preproc_model <- preProcess(train_data, 
-                              method  = c('scale', 'center', 'pca'),
-                              thresh  = PCA_Threshold,
-                              verbose = TRUE)
-} else { 
-  stop("No valid preprocess mode")
-}
+
+preproc_model <- preProcess(train_data, 
+                            method  = caret_preprocess_method,
+                            thresh  = PCA_Threshold,
+                            verbose = TRUE)
 
 pp_train_data <- predict(preproc_model, train_data)
 pp_test_data  <- predict(preproc_model, test_data)
@@ -556,34 +574,43 @@ if (TRAIN_GLMNET) {
 ```{r, save_models }
 
 if (SAVE) {
-  if (!config) {
-    config_data <- data.frame(
-      Parameter  = c("min_class_size",
-                     "cluster_resolution",
-                     "minCount",
-                     "maxCount",
-                     "minFeature",
-                     "maxFeature"),
-      Value  = c(min_class_size,
-                 cluster_resolution,
-                 minCount,
-                 maxCount,
-                 minFeature,
-                 maxFeature)
-      )
-    config_data <- column_to_rownames(config_data, var = "Parameter")
-  } else {
-    config_data["min_class_size", "Value"]     <- min_class_size
-    config_data["cluster_resolution", "Value"] <- cluster_resolution
-    config_data["minCount", "Value"]           <- minCount
-    config_data["maxCount", "Value"]           <- maxCount
-    config_data["minFeature", "Value"]         <- minFeature
-    config_data["maxFeature", "Value"]         <- maxFeature
+  save_csv <- ori_minCount           != minCount ||
+              ori_maxCount           != maxCount ||
+              ori_minFeature         != minFeature ||
+              ori_maxFeature         != maxFeature ||
+              ori_min_class_size     != min_class_size || 
+              ori_cluster_resolution != cluster_resolution ||
+              new_config
+
+  if (save_csv) {
+    if (new_config) {
+      config_data <- data.frame(Parameter  = c("min_class_size",
+                                               "cluster_resolution",
+                                               "minCount",
+                                               "maxCount",
+                                               "minFeature",
+                                               "maxFeature"),
+                                 Value  = c(min_class_size,
+                                            cluster_resolution,
+                                            minCount,
+                                            maxCount,
+                                            minFeature,
+                                            maxFeature)
+                                )
+      config_data <- column_to_rownames(config_data, var = "Parameter")
+    } else {
+      config_data["min_class_size", "Value"]     <- min_class_size
+      config_data["cluster_resolution", "Value"] <- cluster_resolution
+      config_data["minCount", "Value"]           <- minCount
+      config_data["maxCount", "Value"]           <- maxCount
+      config_data["minFeature", "Value"]         <- minFeature
+      config_data["maxFeature", "Value"]         <- maxFeature
+    }
+    
+    write.csv(config_data, 
+              file.path(config_path, paste0(dataset_name, "_config.csv")),
+              row.names = TRUE)
   }
-  
-  write.csv(config_data, 
-            file.path(config_path, paste0(dataset_name, "_config.csv")),
-            row.names = TRUE)
   
   model_information = list(
     seurat_object      = seurat_object,
