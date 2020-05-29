@@ -18,6 +18,17 @@ set.seed(1234)
 
 # Set key use parameters
 
+```{r}
+
+preproc_method   <-  "pp_pca"
+
+dataset_name     <- "AMB"
+
+```
+
+
+# Initialise
+
 ```{r, libraries, message=FALSE}
 
 library(readr)
@@ -71,12 +82,29 @@ log_path         <- file.path(proj_path, "Logs")
 rdata_path       <- file.path(proj_path, "rData")
 config_path      <- file.path(proj_path, "config")
 
-dataset_name     <- "AMB"
 dataset_filename <- paste0(dataset_name, "_ambxxxx")
 
 logger.setup (infoLog = file.path(log_path, "amb.log"))
 
 amb_list         <- list()
+```
+
+
+```{r, preprocess options}
+
+if (preproc_method == "pp_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess_method <- c('scale', 'center', 'pca')
+} else if (preproc_method == "pp_no_pca")  {
+  log_preprocess   <- FALSE
+  caret_preprocess_method <- c('scale', 'center')
+} else if (preproc_method == "pp_log_pca")  {
+  log_preprocess   <- TRUE
+  caret_preprocess_method <- c('scale', 'center', 'pca')
+} else {
+  stop ("Invalid preproc_method")
+}
+
 ```
 
 
@@ -97,7 +125,7 @@ load(file.path(rdata_path, "amb_list.Rdata"))
 logger.info("Info: Started reading data from dataset %s", dataset_name)
 tic(msg = "", quiet = TRUE)
 
-dataset_name     <- "AMB"
+
 dataset_filename <- paste0(dataset_name, "_hierarchical")
 
 READ_FRESH <- FALSE
@@ -250,8 +278,8 @@ Use the model to classify the available data. For now we use the full available 
 data                 <- save_data
 labels               <- save_labels
 
-pp_data              <- predict(amb_list[["class"]][["preproc_model"]], data)
-predicted_classes    <- predict(amb_list[["class"]][["model_gbm"]], pp_data)
+pp_data              <- predict(amb_list[["AMB"]][["preproc_model"]], data)
+predicted_classes    <- predict(amb_list[["AMB"]][["model_gbm"]], pp_data)
 
 ll <- labels
 ll <- cbind(ll, predicted_classes)
@@ -264,21 +292,26 @@ gabaergic_labels     <- labels[which(predicted_classes == "GABAergic"),]
 glutamatergic_data   <- data[which(predicted_classes   == "Glutamatergic"),]
 glutamatergic_labels <- labels[which(predicted_classes == "Glutamatergic"),]
 
-class_models_to_train <- c("GABAergic", "Glutamatergic")
+nonneuronal_data     <- data[which(predicted_classes   == "Non.Neuronal"),]
+nonneuronal_labels   <- labels[which(predicted_classes == "Non.Neuronal"),]
+
+class_models_to_train <- c("GABAergic", "Glutamatergic", "Non.Neuronal")
 
 data_to_be_used <- list(
     "GABAergic"     = gabaergic_data,
     "Glutamatergic" = glutamatergic_data
+   # "Non.Neuronal"  = nonneuronal_data
     )
 
 labels_to_be_used <- list(
     "GABAergic"     = gabaergic_labels,
-    "Glutamatergic" = glutamatergic_labels
+    "Glutamatergic" = glutamatergic_labels,
+    "Non.Neuronal"  = nonneuronal_labels
     )
 ```
 
 
-#  Train two models to get subclasses for GABAergic and Glutamatergic
+#  Train models to get subclasses for GABAergic,  Glutamatergic and Non.Neuronal
 
 ```{r, Subclass Selection}
 
@@ -358,12 +391,12 @@ vip_labels      <- labels[which(predicted_classes  == "Vip"),]
 
 
 gabaergic_subclass_list <- c(
-  "Pvalb",
   "Lamp5",
+  #"Meis2",    # Only one class
+  "Pvalb",
+   #"Serpinf1",
   "Sncg",
   "Sst",
-  #"Serpinf1",
-  #"Meis2",
   "Vip"
   )
 
@@ -470,9 +503,9 @@ np_data      <- data[which(predicted_classes    == "NP"),]
 np_labels    <- labels[which(predicted_classes  == "NP"),]
 
 glutamatergic_subclass_list <- c(
-  #"CR",      # problem, cause not known 
+  #"CR",      # Only one class
   "L2.3.IT",
-  #"L4",      # do nor try this because it has only one class, no model needed
+  #"L4",      # Only one class
   "L5.IT",
   "L5.PT",
   "L6.CT",
@@ -542,9 +575,6 @@ for (m in glutamatergic_subclass_list) {
 }
 
 ```
-
-
-
 
 
 ```{r}

@@ -232,7 +232,34 @@ l
 
 ```
 
-## Subclass level Non.Neuronal	
+## Subclass level Endothelial
+
+```{r}
+
+l1 <- labels %>%
+  filter(Class == "Endothelial") %>%
+  group_by(Class, Subclass, cluster) %>%
+  summarise(n = n()) %>%
+  #filter( n > 10) %>%
+  group_by(Subclass) %>%
+  summarise(NumberOfCluster = n()) %>%
+  arrange (Subclass) 
+
+l2 <- labels %>%
+  filter(Class == "Endothelial") %>%
+  group_by(Subclass) %>%
+  summarise(CellsInCluster = n()) %>%
+  #filter( CellsInCluster > 10) %>%
+  arrange (Subclass)
+
+l1 <- column_to_rownames(l1, var = "Subclass")
+l2 <- column_to_rownames(l2, var = "Subclass")
+l  <- cbind(l1,l2)
+l
+
+```
+
+## Subclass level Non.Neuronal
 
 ```{r}
 
@@ -240,7 +267,7 @@ l1 <- labels %>%
   filter(Class == "Non.Neuronal") %>%
   group_by(Class, Subclass, cluster) %>%
   summarise(n = n()) %>%
-  filter( n > 10) %>%
+  #filter( n > 10) %>%
   group_by(Subclass) %>%
   summarise(NumberOfCluster = n()) %>%
   arrange (Subclass) 
@@ -249,14 +276,16 @@ l2 <- labels %>%
   filter(Class == "Non.Neuronal") %>%
   group_by(Subclass) %>%
   summarise(CellsInCluster = n()) %>%
-  filter( CellsInCluster > 10) %>%
+  #filter( CellsInCluster > 10) %>%
   arrange (Subclass)
 
 l1 <- column_to_rownames(l1, var = "Subclass")
 l2 <- column_to_rownames(l2, var = "Subclass")
-cbind(l1,l2)
+l  <- cbind(l1,l2)
+l
 
 ```
+
 
 ```{r}
 

@@ -9,9 +9,11 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
 ```{r}
 library(tidyverse)
 ```
+
 
 ```{r, initialise}
 
@@ -42,6 +44,7 @@ data_sets <- list(
 
 
 ```{r, read data}
+
 
 
 if (READ_FRESH) {
@@ -80,15 +83,20 @@ if (READ_FRESH) {
 } else {
   load(file.path(rdata_path, "dataset_info.rData"))
 }
+
 ```
 
 
 # Report on datasets
+
 ```{r}
+
 for (i in 1:length(gene_names)) {
   cat(sprintf("Corrected length of %20s is %d\n", names(gene_names[i]), length(gene_names[[i]])))
 }
+
 ```
+
 
 ```{r, class overview}
 
@@ -127,6 +135,7 @@ class_info <- data.frame(
 )
 
 class_info
+
 ```
 
 # How many genes do the data sets have in common?
@@ -163,6 +172,7 @@ nr_total_genes
 # Do the top genes appear in all data sets?
 
 ```{r, intersect top genes}
+
 size_of_top_genes <- 1000
 
 cat(sprintf("How many of the %d top genes occur in other datasets? \n\n", size_of_top_genes))
@@ -175,6 +185,7 @@ for (i in 1:(length(data_sets))) {
   }
   cat(sprintf("\n"))
 }
+
 ```
 
 

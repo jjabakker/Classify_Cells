@@ -213,8 +213,8 @@ Accuracy     <- dim(Pred1[which(Pred1$Correct == TRUE),])[1] / dim(Pred1)[1]
 Pred2        <- Predicted[Predicted$Reliable == TRUE, c("Reliable", "Correct")]
 CorrAccuracy <- dim(Pred2[which(Pred2$Correct == TRUE),])[1]  / dim(Pred2)[1]
 new          <- data.frame(Method       = method,
-                           TestData     = dataset_name,
                            ModelData    = model_name,
+                           TestData     = dataset_name,
                            Accuracy     = Accuracy,
                            CorrAccuracy = CorrAccuracy,
                            Confidence   = mean(Predicted$Max),

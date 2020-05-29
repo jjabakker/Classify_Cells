@@ -138,3 +138,80 @@ title_string <- sprintf("Dataset '%s' predicted with model data '%s', using meth
                         dataset_name, model_name, method, features_limit, PCA_Threshold)
 grid.arrange(p1, p2, ncol=2, top = title_string)
 
+
+
+
+######################################################################################################################
+######################################################################################################################
+######################################################################################################################
+######################################################################################################################
+# New addition: careful!
+######################################################################################################################
+######################################################################################################################
+######################################################################################################################
+######################################################################################################################
+
+
+
+######################################################################################################################
+# Get the confusion matrix
+######################################################################################################################
+
+# Before callingconfusionMatrix add missing classes to make sure bot Predicted and Regference have the same classes 
+
+levelsP  <- levels(Predicted$PredictedClass)
+levelsR  <- levels(Predicted$ReferenceClass)
+add_to_R <- setdiff(levelsP, levelsR)
+add_to_P <- setdiff(levelsR, levelsP)
+
+levels(Predicted$PredictedClass) <- c(levels(Predicted$PredictedClass), add_to_P)
+levels(Predicted$ReferenceClass) <- c(levels(Predicted$ReferenceClass), add_to_R)
+
+cm <- confusionMatrix(Predicted$PredictedClass,
+                      Predicted$ReferenceClass,
+                      mode = "everything",
+                      dnn = c("Predicted", "Reference"))
+
+cat(sprintf("\n\n\n\n"))
+cat(sprintf("*************************************************************************************************************\n"))
+cat(sprintf("Confusion Matrix for %s, model %s, and dataset %s\n", method, model_name, dataset_name))
+cat(sprintf("*************************************************************************************************************\n\n"))
+print(cm)
+
+
+######################################################################################################################
+# Calculate median F1
+######################################################################################################################
+
+F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
+F1_2         <- F1_1[complete.cases(F1_1),]
+if  (class(F1_2) == "numeric") {
+  F1_3         <- 2 * (F1_2["Precision"] * F1_2["Recall"]) / (F1_2["Precision"] + F1_2["Recall"])
+} else {
+  F1_3         <- 2 * (F1_2[ , "Precision"] * F1_2[ , "Recall"]) / (F1_2[ ,"Precision"] + F1_2[ ,"Recall"])
+}
+medianF1     <- median(F1_3, na.rm = TRUE)
+meanF1       <- mean(F1_3, na.rm = TRUE)
+
+
+
+
+######################################################################################################################
+# Fill the report-out table
+######################################################################################################################
+
+Pred1        <- Predicted[ ,c("Reliable", "Correct")]
+Accuracy     <- dim(Pred1[which(Pred1$Correct == TRUE),])[1] / dim(Pred1)[1]
+
+Pred2        <- Predicted[Predicted$Reliable == TRUE, c("Reliable", "Correct")]
+CorrAccuracy <- dim(Pred2[which(Pred2$Correct == TRUE),])[1]  / dim(Pred2)[1]
+new          <- data.frame(Method       = method,
+                           ModelData    = model_name,
+                           TestData     = dataset_name,
+                           Accuracy     = Accuracy,
+                           CorrAccuracy = CorrAccuracy,
+                           Confidence   = mean(Predicted$Max),
+                           medianF1     = medianF1,
+                           meanF1       = meanF1) 
+
+report_out   <- rbind(report_out, new)
