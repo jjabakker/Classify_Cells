@@ -459,6 +459,7 @@ if (SEURAT_VERBOSE) {
   
   #-------------------------------------
   source("Code/Train/seurat_analysis.R")
+  seurat_object <- run_seurat_analysis(seurat_object)
   #-------------------------------------
   
   FeatureScatter(seurat_object, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") + NoLegend()

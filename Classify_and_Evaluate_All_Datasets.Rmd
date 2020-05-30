@@ -53,6 +53,7 @@ Options are:
 
 # Specify all the pairs of datasets and models to evaluate
 
+library(tidyverse)
 to_review <- tribble(
   ~ModelData,             ~TestData,
   
@@ -87,9 +88,11 @@ PREDICT_GLMNET         <- FALSE
 
 ```{r}
 
-to_review <- rowid_to_column(to_review, "nr")
-to_review <- as.data.frame(to_review)
-to_review
+if  (FALSE) {
+  to_review <- rowid_to_column(to_review, "nr")
+  to_review <- as.data.frame(to_review)
+  to_review
+}
 
 ```
 
@@ -103,6 +106,9 @@ library(gridExtra)
 library(caret)
 library(matrixStats)
 library(GGally)
+
+source("Code/Predict/predict_model_with_labels.R")
+source("Code/Predict/read_model_and_data.R")
 
 ```
 
@@ -156,13 +162,23 @@ sink(file.path(log_path, paste0(preproc_method, "_all_classify.txt")))
 for (row in 1:nrow(to_review)) {
   
   # Set the data and model namde and read the data
-  model_name     <- to_review[row, "ModelData"]
-  dataset_name   <- to_review[row, "TestData"]
+  model_name      <- to_review[row, "ModelData"]
+  dataset_name    <- to_review[row, "TestData"]
   
-  #-------------------------------------------
-  source("Code/Predict/read_model_and_data.R")
-  #-------------------------------------------
-  
+  ret             <- read_model_and_data(rdata_path, model_name, preproc_method)
+  preproc_model   <- ret$model[["preproc_model"]]
+  model_svmRadial <- ret$model[["model_svmRadial"]]
+  model_svmLinear <- ret$model[["model_svmLinear"]]
+  model_rf        <- ret$model[["model_rf"]]
+  model_gbm       <- ret$model[["model_gbm"]]
+  model_glmnet    <- ret$model[["model_glmnet"]]
+  features_limit  <- ret$model[["features_limit"]]
+  PCA_Threshold   <- ret$model[["PCA_Threshold"]]
+  top_genes       <- ret$model[["top_genes"]]
+  data            <- ret$data[["data"]]
+  labels          <- ret$data[["labels"]]
+  trainRowNumbers <- ret$data[["trainRowNumbers"]]
+
   if (log_preprocess) {
     data <- log(1 + data)
   }
@@ -188,48 +204,59 @@ for (row in 1:nrow(to_review)) {
   }
   
   if (PREDICT_SVMR && !is.null(model_svmRadial)) { 
-    method <- "SVMR"
-    model  <- model_svmRadial
-    
-    #-------------------------------------------------  
-    source("Code/Predict/predict_model_with_labels.R")
-    #-------------------------------------------------
+    ret         <- predict_model_with_labels(method     = "SVMR",
+                                           model        = model_svmRadial, 
+                                           model_name   = model_name,
+                                           dataset_name = dataset_name,
+                                           data         = data, 
+                                           labels       = labels, 
+                                           report_out   = report_out)
+    report_out <- ret$report_out 
   }
   
   if (PREDICT_SVML && !is.null(model_svmLinear)) { 
-    method <- "SVML"
-    model  <- model_svmLinear
-    
-    #-------------------------------------------------  
-    source("Code/Predict/predict_model_with_labels.R")
-    #-------------------------------------------------
+    ret         <- predict_model_with_labels(method     = "SVML",
+                                           model        = model_svmLinear, 
+                                           model_name   = model_name,
+                                           dataset_name = dataset_name,
+                                           data         = data, 
+                                           labels       = labels, 
+                                           report_out   = report_out)   
+    report_out <- ret$report_out    
   }
   
   if (PREDICT_RF && !is.null(model_rf)) { 
-    method <- "RF"
-    model  <- model_rf
-    
-    #-------------------------------------------------  
-    source("Code/Predict/predict_model_with_labels.R")
-    #-------------------------------------------------  
+    ret         <- predict_model_with_labels(method     = "RF",
+                                           model        = model_rf, 
+                                           model_name   = model_name,
+                                           dataset_name = dataset_name,
+                                           data         = data, 
+                                           labels       = labels, 
+                                           report_out   = report_out) 
+    report_out <- ret$report_out 
   }
   
   if (PREDICT_GBM && !is.null(model_gbm)) { 
-    method <- "GBM"
-    model  <- model_gbm
-    
-    #-------------------------------------------------  
-    source("Code/Predict/predict_model_with_labels.R")
-    #-------------------------------------------------
+
+    ret        <- predict_model_with_labels(method       = "GBM",
+                                            model        = model_gbm, 
+                                            model_name   = model_name,
+                                            dataset_name = dataset_name,
+                                            data         = data, 
+                                            labels       = labels, 
+                                            report_out   = report_out) 
+    report_out <- ret$report_out 
   }
  
   if (PREDICT_GLMNET && !is.null(model_glmnet)) { 
-    method <- "PREDICT_GLMNET"
-    model  <- model_glmnet
-    
-    #-------------------------------------------------  
-    source("Code/Predict/predict_model_with_labels.R")
-    #-------------------------------------------------
+    ret        <- predict_model_with_labels(method       = "PREDICT_GLMNET",
+                                            model        = model_glmnet, 
+                                            model_name   = model_name,
+                                            dataset_name = dataset_name,
+                                            data         = data, 
+                                            labels       = labels, 
+                                            report_out   = report_out)      
+    report_out <- ret$report_out 
   }
 }
 

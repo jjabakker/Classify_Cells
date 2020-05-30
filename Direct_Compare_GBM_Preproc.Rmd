@@ -46,8 +46,8 @@ preproc_method       <- "pp_pca"
 # Specify which models should be run
 # Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
 
-TRAIN_GBM_pp_pca  <- FALSE
-TRAIN_GBM_PP_NO_PCA  <- FALSE
+TRAIN_GBM_PP_PCA     <- TRUE
+TRAIN_GBM_PP_NO_PCA  <- TRUE
 TRAIN_GBM_PP_LOG     <- TRUE
 
 ```
@@ -70,28 +70,28 @@ library(matrixStats)
 library(tictoc)
 library(MazamaCoreUtils)        # Used for logging messages to a file
 
+source("Code/Train/seurat_analysis.R")
+source("Code/Train/read_dataset.R")
+source("Code/Predict/predict_model_with_labels.R")
+
 ```
 
 
 ```{r, initialise, message=FALSE}
 
-PCA_Threshold   <- 0.90         # The percentage variance explained by the PCA
-                                # A high percentage requires more PC dimensions to be considered
+PCA_Threshold    <- 0.90         # The percentage variance explained by the PCA
+                                 # A high percentage requires more PC dimensions to be considered
 
-features_limit  <- 1000         # The number of features that will be considered duringthe PCA
-                                # A high number use sthe richness of the data set optimally, but makes processing slo
+features_limit   <- 1000         # The number of features that will be considered duringthe PCA
+                                 # A high number uses the richness of the data set optimally, but makes processing slo
 
-VERBOSE         <- TRUE         # If TRUE generates analysis data
-SEURAT_VERBOSE  <- FALSE
-VARIABLE_GENES  <- TRUE
-LOGGER          <- FALSE
+VERBOSE          <- TRUE         # If TRUE generates analysis data
+SEURAT_VERBOSE   <- FALSE
+VARIABLE_GENES   <- TRUE
+LOGGER           <- FALSE
 
 # Summary results will be kept here 
-report_out <- data.frame(Method     = character(),
-                         ModelData  = character(),
-                         TestData   = character(),
-                         Accuracy   = numeric(),
-                         Confidence = numeric())
+report_out       <- data.frame()
 
 # Information of all the runs will be gathered in the class_summaries list  
 class_summaries <- list()
@@ -132,9 +132,10 @@ logger.setup (infoLog = file.path(log_path, paste0("pp_compare.log")))
 
 ```{r, Read}
 
-#----------------------------------
-source("Code/Train/read_dataset.R")
-#----------------------------------
+
+ret    <- read_dataset(data_path, dataset_name)
+data   <- ret$data
+labels <- ret$labels
 
 if (log_preprocess) {
   data <- log(1 + data)
@@ -181,56 +182,56 @@ for (i in 1:length(table(labels$ident))) {
 
 ```{r, variable_features, fig.height=5, message = FALSE, echo=FALSE}
 
-if (VARIABLE_GENES) {
-  seurat_object <- CreateSeuratObject(counts    = t(data),
-                                      meta.data = as.data.frame(labels),
-                                      min.cells = 5)
+
+seurat_object <- CreateSeuratObject(counts    = t(data),
+                                    meta.data = as.data.frame(labels),
+                                    min.cells = 5)
+
+seurat_object <- NormalizeData(seurat_object, 
+                               normalization.method = "LogNormalize", 
+                               scale.factor = 1000000)
+
+seurat_object <- FindVariableFeatures(object           = seurat_object, 
+                                      selection.method = 'vst',
+                                      verbose          = TRUE,
+                                      nfeatures        = dim(data)[2])
+
+# Identify the most highly variable genes
+top_genes      <- VariableFeatures(seurat_object)
+
+# Show composition
+cat(sprintf("Information on dataset after variable gene determination of dataset %s\n", dataset_name))
+cat(sprintf("Removed %d genes that apparently are not very variable \n\n", dim(data)[2] - length(top_genes) )) 
+
+data = data[ , top_genes]
+cat(sprintf("\nThere are %d cells and %d features.\n", dim(data)[1], dim(data)[2]))
+for (i in 1:length(table(labels$ident))) {
+  cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i]))
+}
+cat(sprintf("\n"))
+
+if (SEURAT_VERBOSE) {
   
-  seurat_object <- NormalizeData(seurat_object, 
-                                 normalization.method = "LogNormalize", 
-                                 scale.factor = 1000000)
+  # plot variable features with and without labels
+  p1 <- VariableFeaturePlot(seurat_object)
+  p2 <- LabelPoints(plot   = p1, 
+                    points = top_genes[1:15], 
+                    repel  = TRUE)
+  grid.arrange(p1, p2, nrow = 1)
+  rm(p1, p2)
   
-  seurat_object <- FindVariableFeatures(object           = seurat_object, 
-                                        selection.method = 'vst',
-                                        verbose          = TRUE,
-                                        nfeatures        = dim(data)[2])
+  cluster_resolution = 0.5
   
-  # Identify the most highly variable genes
-  top_genes      <- VariableFeatures(seurat_object)
-  
-  # Show composition
-  cat(sprintf("Information on dataset after variable gene determination of dataset %s\n", dataset_name))
-  cat(sprintf("Removed %d genes that apparently are not very variable \n\n", dim(data)[2] - length(top_genes) )) 
-  
-  data = data[ , top_genes]
-  cat(sprintf("\nThere are %d cells and %d features.\n", dim(data)[1], dim(data)[2]))
-  for (i in 1:length(table(labels$ident))) {
-    cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i]))
-  }
-  cat(sprintf("\n"))
-  
-  if (SEURAT_VERBOSE) {
-    
-    # plot variable features with and without labels
-    p1 <- VariableFeaturePlot(seurat_object)
-    p2 <- LabelPoints(plot   = p1, 
-                      points = top_genes[1:15], 
-                      repel  = TRUE)
-    grid.arrange(p1, p2, nrow = 1)
-    rm(p1, p2)
-    
-    cluster_resolution = 0.5
-    
-    source("Code/Train/seurat_analysis.R")
-    FeatureScatter(seurat_object, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") + NoLegend()
-    VlnPlot(seurat_object, features = c("nFeature_RNA", "nCount_RNA"), ncol = 2)
-    DimPlot(seurat_object, reduction = 'pca')
-    DimPlot(seurat_object, reduction = 'tsne')
-    DimPlot(seurat_object, reduction = 'umap', label = TRUE) + NoLegend()
-    VizDimLoadings(seurat_object, dims = 1:4, reduction = 'pca')
-    DimHeatmap(seurat_object, dims = 1:15, cells = 500, balanced = TRUE)
-    ElbowPlot(seurat_object)
-  }
+  seurat_object <- run_seurat_analysis(seurat_object)
+      
+  FeatureScatter(seurat_object, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") + NoLegend()
+  VlnPlot(seurat_object, features = c("nFeature_RNA", "nCount_RNA"), ncol = 2)
+  DimPlot(seurat_object, reduction = 'pca')
+  DimPlot(seurat_object, reduction = 'tsne')
+  DimPlot(seurat_object, reduction = 'umap', label = TRUE) + NoLegend()
+  VizDimLoadings(seurat_object, dims = 1:4, reduction = 'pca')
+  DimHeatmap(seurat_object, dims = 1:15, cells = 500, balanced = TRUE)
+  ElbowPlot(seurat_object)
 }
 
 ```
@@ -256,59 +257,59 @@ gbm_accuracy     <- 0
 log_preprocess   <- FALSE
 caret_preprocess_method <- c('scale', 'center', 'pca')
   
-if (TRAIN_GBM_pp_pca) {
+if (TRAIN_GBM_PP_PCA) {
   
   data   <- save_data
   labels <- save_labels
-  method <- "gbm"
   
-  # Limit the data set to the number of genes specified in 'features_limit' (1000 has been found to be a good choice)
+  # Limit the data set to the number of genes specified in 'features_limit' 
   ldata = as.data.frame(data[ , top_genes[1:features_limit]])
   
-  ldata              <- cbind.data.frame(labels, ldata)
-  ldata              <- ldata %>% select(-one_of("cell_id"))
-  trainRowNumbers    <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
+  ldata           <- cbind.data.frame(labels, ldata)
+  ldata           <- ldata %>% select(-one_of("cell_id"))
+  trainRowNumbers <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
   
-  train_data <- ldata[trainRowNumbers,]
-  test_data  <- ldata[-trainRowNumbers,]
+  train_data      <- ldata[trainRowNumbers,]
+  test_data       <- ldata[-trainRowNumbers,]
   
 
-  preproc_model <- preProcess(train_data, 
-                              method  = caret_preprocess_method,
-                              thresh  = PCA_Threshold,
-                              verbose = TRUE)
+  preproc_model   <- preProcess(train_data, 
+                                method  = caret_preprocess_method,
+                                thresh  = PCA_Threshold,
+                                verbose = TRUE)
  
-  pp_train_data <- predict(preproc_model, train_data)
+  pp_train_data   <- predict(preproc_model, train_data)
 
-  model_gbm <- train(ident ~ ., 
-                     data      = pp_train_data, 
-                     method    = method,
-                     trControl = trainControl("cv", 
-                                              number = 5, 
-                                              classProbs = TRUE,
-                                              verboseIter = TRUE)) 
+  model_gbm       <- train(ident ~ ., 
+                           data      = pp_train_data, 
+                           method    = "gbm",
+                           trControl = trainControl("cv", 
+                                                    number = 5, 
+                                                    classProbs = TRUE,
+                                                    verboseIter = TRUE)) 
   
 
   ###########################################################################
   # Predict and Evaluate
   ###########################################################################
-  
-  # A few interface variables need to be set in order to be able to call evaluate.R
 
-  model_name  <- dataset_name
-  model       <- model_gbm
-  labels      <- test_data[,1:2]
-  data        <- test_data
+  ret         <- predict_model_with_labels(method       = "gbm",
+                                           model        = model_gbm, 
+                                           model_name   = dataset_name,
+                                           dataset_name = dataset_name,
+                                           data         = test_data, 
+                                           labels       = test_data[,1:2], 
+                                           report_out   = report_out)
   
-  #-------------------------------------------------
-  source("Code/Predict/predict_model_with_labels.R")
-  #-------------------------------------------------
+  report_out        <- ret$report_out
+  predicted_classes <- ret$predicted_classes
+  class_summary     <- ret$class_summary
   
-  cat(sprintf("Percentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
-              min_prob_value,
-              correct_predicted_percentage,
-              correct_assigned_percentage,
-              unassigned_percentage))
+  # cat(sprintf("Percentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
+  #             min_prob_value,
+  #             correct_predicted_percentage,
+  #             correct_assigned_percentage,
+  #             unassigned_percentage))
   
   cm <- confusionMatrix(test_data[,1],
                         predicted_classes,
@@ -316,13 +317,9 @@ if (TRAIN_GBM_pp_pca) {
                         dnn = c("Reference", "Predicted"))
   print(cm)
   gbm_accuracy <- cm[["overall"]][["Accuracy"]]
-  
-  F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
-  F1_2         <- F1_1[complete.cases(F1_1),]
-  F1_3         <- 2 * (F1_2[,"Precision"] * F1_2[,"Recall"]) / (F1_2[,"Precision"] + F1_2[,"Recall"])
-  gbm_F1       <- median(F1_3, na.rm = TRUE)
-  knitr::kable(class_summary, digits = 3, caption = "Class Summary overview")
- 
+  gbm_F1       <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+
+  print(class_summary)
 }
 ```
 
@@ -340,55 +337,54 @@ if (TRAIN_GBM_PP_NO_PCA) {
   
   data   <- save_data
   labels <- save_labels
-  method <- "gbm"
   
   # Limit the data set to the number of genes specified in 'features_limit' (1000 has been found to be a good choice)
-  ldata = as.data.frame(data[ , top_genes[1:features_limit]])
+  ldata              <- as.data.frame(data[ , top_genes[1:features_limit]])
   
   ldata              <- cbind.data.frame(labels, ldata)
   ldata              <- ldata %>% select(-one_of("cell_id"))
   trainRowNumbers    <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
   
-  train_data <- ldata[trainRowNumbers,]
-  test_data  <- ldata[-trainRowNumbers,]
-  
+  train_data         <- ldata[trainRowNumbers,]
+  test_data          <- ldata[-trainRowNumbers,]
  
-  preproc_model <- preProcess(train_data, 
-                              method  = caret_preprocess_method,
-                              thresh  = PCA_Threshold,
-                              verbose = TRUE)
+  preproc_model      <- preProcess(train_data, 
+                                   method  = caret_preprocess_method,
+                                   thresh  = PCA_Threshold,
+                                   verbose = TRUE)
   
-  pp_train_data <- predict(preproc_model, train_data)
-
-  model_gbm <- train(ident ~ ., 
-                     data      = pp_train_data, 
-                     method    = method,
-                     trControl = trainControl("cv", 
-                                              number = 5, 
-                                              classProbs = TRUE,
-                                              verboseIter = TRUE)) 
-  
+  pp_train_data      <- predict(preproc_model, train_data)
+      
+  model_gbm          <- train(ident ~ ., 
+                              data      = pp_train_data, 
+                              method    = "gbm",
+                              trControl = trainControl("cv", 
+                                                       number = 5, 
+                                                       classProbs = TRUE,
+                                                       verboseIter = TRUE)) 
+          
 
   ###########################################################################
   # Predict and Evaluate
   ###########################################################################
-  
-  # A few interface variables need to be set in order to be able to call evaluate.R
 
-  model_name  <- dataset_name
-  model       <- model_gbm
-  labels      <- test_data[,1:2]
-  data        <- test_data
+  ret               <- predict_model_with_labels(method       = "gbm",
+                                                 model        = model_gbm, 
+                                                 model_name   = dataset_name,
+                                                 dataset_name = dataset_name,
+                                                 data         = test_data, 
+                                                 labels       = test_data[,1:2], 
+                                                 report_out   = report_out)
   
-  #-------------------------------------------------
-  source("Code/Predict/predict_model_with_labels.R")
-  #-------------------------------------------------
+  report_out        <- ret$report_out
+  predicted_classes <- ret$predicted_classes
+  class_summary     <- ret$class_summary
   
-  cat(sprintf("Percentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
-              min_prob_value,
-              correct_predicted_percentage,
-              correct_assigned_percentage,
-              unassigned_percentage))
+  # cat(sprintf("Percentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
+  #             min_prob_value,
+  #             correct_predicted_percentage,
+  #             correct_assigned_percentage,
+  #             unassigned_percentage))
   
   cm <- confusionMatrix(test_data[,1],
                         predicted_classes,
@@ -396,13 +392,9 @@ if (TRAIN_GBM_PP_NO_PCA) {
                         dnn = c("Reference", "Predicted"))
   print(cm)
   gbm_accuracy <- cm[["overall"]][["Accuracy"]]
+  gbm_F1       <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
   
-  F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
-  F1_2         <- F1_1[complete.cases(F1_1),]
-  F1_3         <- 2 * (F1_2[,"Precision"] * F1_2[,"Recall"]) / (F1_2[,"Precision"] + F1_2[,"Recall"])
-  gbm_F1       <- median(F1_3, na.rm = TRUE)
-  knitr::kable(class_summary, digits = 3, caption = "Class Summary overview")
- 
+  print(class_summary) 
 }
 ```
 
@@ -457,22 +449,23 @@ if (TRAIN_GBM_PP_LOG) {
   # Predict and Evaluate
   ###########################################################################
   
-  # A few interface variables need to be set in order to be able to call evaluate.R
-
-  model_name  <- dataset_name
-  model       <- model_gbm
-  labels      <- test_data[,1:2]
-  data        <- test_data
+  ret         <- predict_model_with_labels(method       = "gbm",
+                                           model        = model_gbm, 
+                                           model_name   = dataset_name,
+                                           dataset_name = dataset_name,
+                                           data         = test_data, 
+                                           labels       = test_data[,1:2], 
+                                           report_out   = report_out)
   
-  #-------------------------------------------------
-  source("Code/Predict/predict_model_with_labels.R")
-  #-------------------------------------------------
+  report_out        <- ret$report_out 
+  predicted_classes <- ret$predicted_classes
+  class_summary     <- ret$class_summary
   
-  cat(sprintf("Percentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
-              min_prob_value,
-              correct_predicted_percentage,
-              correct_assigned_percentage,
-              unassigned_percentage))
+  # cat(sprintf("Percentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
+  #             min_prob_value,
+  #             correct_predicted_percentage,
+  #             correct_assigned_percentage,
+  #             unassigned_percentage))
   
   cm <- confusionMatrix(test_data[,1],
                         predicted_classes,
@@ -480,12 +473,8 @@ if (TRAIN_GBM_PP_LOG) {
                         dnn = c("Reference", "Predicted"))
   print(cm)
   gbm_accuracy <- cm[["overall"]][["Accuracy"]]
+  gbm_F1       <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
   
-  F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
-  F1_2         <- F1_1[complete.cases(F1_1),]
-  F1_3         <- 2 * (F1_2[,"Precision"] * F1_2[,"Recall"]) / (F1_2[,"Precision"] + F1_2[,"Recall"])
-  gbm_F1       <- median(F1_3, na.rm = TRUE)
-  knitr::kable(class_summary, digits = 3, caption = "Class Summary overview")
- 
+  print(class_summary)
 }
 ```

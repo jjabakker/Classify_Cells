@@ -30,6 +30,8 @@ library(matrixStats)
 library(tictoc)                 # Used for timing of code
 library(MazamaCoreUtils)        # Used for logging messages to a file
 
+source("Code/Train/read_dataset.R")
+
 ```
 
 
@@ -88,9 +90,9 @@ labels_list <- list()
 for (dataset_name in datasets_names) {    
   cat(sprintf("\nReading dataset %s.\n\n", dataset_name))
   
-  #----------------------------------
-  source("Code/Train/read_dataset.R")
-  #----------------------------------
+  ret    <- read_dataset(data_path, dataset_name)
+  data   <- ret$data
+  labels <- ret$labels
   
   d           <- list(dataset_name = dataset_name, data = data)
   data_list   <- list.append(data_list, d)
@@ -171,8 +173,10 @@ for (i in 1:length(data_list)) {
   data_list[[i]][["data"]] <- data
   
   if (dim(data)[2] != ngenes) {
-    cat(sprintf("Removed %d invariable genes in dataset %s.\n", ngenes - dim(data)[2], data_list[[i]][["dataset_name"]]))
-    cat(sprintf("Left %d variable genes in dataset %s.\n", dim(data)[2], data_list[[i]][["dataset_name"]]))
+    cat(sprintf("Removed %d invariable genes in dataset %s.\n", 
+                ngenes - dim(data)[2], data_list[[i]][["dataset_name"]]))
+    cat(sprintf("Left %d variable genes in dataset %s.\n", 
+                dim(data)[2], data_list[[i]][["dataset_name"]]))
   } else {
     cat(sprintf("No invariable genes found in dataset %s.\n", data_list[[i]][["dataset_name"]]))
   }
@@ -374,7 +378,7 @@ if (SAVE) {
 
 ```{r}
 
-# This is a restart point where you can load previouslysaves results 
+# This is a restart point where you can load previously saved results 
 
 if (FALSE) {
   
@@ -484,28 +488,28 @@ unassigned_percentage        <- unassigned_count / predicted_count * 100
 acinar_overall = mean(Predicted[Predicted$PredictedClass == "acinar","Max"])
 
 class_summary <- data.frame(
-  average_prob = numeric(),
-  prob_correct = numeric(),
-  prob_incorrect = numeric(),
-  prob_reliable = numeric(),
+  average_prob    = numeric(),
+  prob_correct    = numeric(),
+  prob_incorrect  = numeric(),
+  prob_reliable   = numeric(),
   prob_unreliable = numeric(),
-  nr_correct = numeric(),
-  nr_incorrect = numeric(),
-  nr_reliabe = numeric(),
-  nr_unreliabe = numeric())
+  nr_correct      = numeric(),
+  nr_incorrect    = numeric(),
+  nr_reliabe      = numeric(),
+  nr_unreliabe    = numeric())
 
 for (class in colnames(probability)) {
   new_rec = data.frame(
-    average_prob = mean(Predicted[which((Predicted$PredictedClass == class)), "Max"]),
-    prob_correct = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == TRUE)), "Max"]),
-    prob_incorrect = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == FALSE)), "Max"]),
-    prob_reliable = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == TRUE)), "Max"]),
+    average_prob    = mean(Predicted[which((Predicted$PredictedClass == class)), "Max"]),
+    prob_correct    = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == TRUE)), "Max"]),
+    prob_incorrect  = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == FALSE)), "Max"]),
+    prob_reliable   = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == TRUE)), "Max"]),
     prob_unreliable = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == FALSE)), "Max"]),
       
-    nr_correct = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == TRUE)), ]),
-    nr_incorrect = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == FALSE)), ]),
-    nr_reliabe = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == TRUE)), ]),
-    nr_unreliabe = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == FALSE)), ]))
+    nr_correct      = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == TRUE)), ]),
+    nr_incorrect    = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == FALSE)), ]),
+    nr_reliabe      = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == TRUE)), ]),
+    nr_unreliabe    = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == FALSE)), ]))
   rownames(new_rec) <- class
   if ((new_rec$nr_correct + new_rec$nr_incorrect) != 0) {
     class_summary <- rbind(class_summary, new_rec)
@@ -530,18 +534,18 @@ IncorrectlyPredicted <- Predicted[Predicted$Correct == FALSE,]
 p1 <- ggplot() + 
   geom_jitter(data = CorrectlyPredicted, 
               mapping = aes(x = PredictedClass, y = Max),
-              width = 0.3,
-              height = 0,
-              alpha = 0.7,
-              size  = 0.6,
-              color = 'green') +
+              width   = 0.3,
+              height  = 0,
+              alpha   = 0.7,
+              size    = 0.6,
+              color   = 'green') +
   geom_jitter(data = IncorrectlyPredicted, 
               mapping = aes(x = PredictedClass, y = Max),
-              width = 0.3,
-              height = 0,
-              alpha = 0.7,
-              size  = 0.6,
-              color = 'red') +
+              width   = 0.3,
+              height  = 0,
+              alpha   = 0.7,
+              size    = 0.6,
+              color   = 'red') +
   labs(x = "Predicted") +
   labs(y = "Probability of prediction") +
   scale_y_continuous(limits = c(0, 1.0), breaks = seq(0, 1.0, 0.1)) +
@@ -551,18 +555,18 @@ p1 <- ggplot() +
 p2 <- ggplot() + 
   geom_jitter(data = CorrectlyPredicted, 
               mapping = aes(x = ReferenceClass, y = Max),
-              width = 0.3,
-              height = 0,
-              alpha = 0.7,
-              size  = 0.6,
-              color = 'green') +
+              width   = 0.3,
+              height  = 0,
+              alpha   = 0.7,
+              size    = 0.6,
+              color   = 'green') +
   geom_jitter(data = IncorrectlyPredicted, 
               mapping = aes(x = ReferenceClass, y = Max),
-              width = 0.3,
-              height = 0,
-              alpha = 0.7, 
-              size  = 0.6,
-              color = 'red') +
+              width   = 0.3,
+              height  = 0,
+              alpha   = 0.7, 
+              size    = 0.6,
+              color   = 'red') +
   labs(x = "Reference") +
   labs(y = "Probability of prediction") +
   scale_y_continuous(limits = c(0, 1.0), breaks = seq(0, 1.0, 0.1)) +

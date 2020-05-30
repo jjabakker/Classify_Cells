@@ -44,8 +44,11 @@ to_review <- tribble(
 )
 
 # Select preprocessing
+preproc_method   <- "pp_pca"
 
-preproc_method         <- "pp_pca"
+# Select model
+method           <- "gbm"
+
 
 ```
 
@@ -68,6 +71,8 @@ library(gridExtra)
 library(caret)
 library(matrixStats)
 library(GGally)
+
+source("Code/Predict/read_model_and_data.R")
 
 ```
 
@@ -97,12 +102,7 @@ rdata_path  <- file.path(proj_path, "rData")
 config_path <- file.path(proj_path, "config")
 
 # Initialise the report_out table
-report_out <- data.frame(Method       = character(),
-                         ModelData    = character(),
-                         TestData     = character(),
-                         Accuracy     = numeric(),
-                         CorrAccuracy = numeric(),
-                         Confidence   = numeric())
+report_out <- data.frame()
 
 # Information of all the runs will be gathered in the class_summaries list  
 class_summaries <- list()
@@ -126,11 +126,15 @@ for (row in 1:nrow(to_review)) {
   model_name     <- to_review[row, "ModelData"]
   dataset_name   <- to_review[row, "TestData"]
   
-  #-------------------------------------------
-  model_name     <- model_name
-  dataset_name   <- dataset_name
-  source("Code/Predict/read_model_and_data.R")
-  #-------------------------------------------
+  ret <- read_model_and_data(rdata_path, model_name, preproc_method)
+  preproc_model   <- ret$model[["preproc_model"]]
+  model           <- ret$model[["model_gbm"]]
+  features_limit  <- ret$model[["features_limit"]]
+  PCA_Threshold   <- ret$model[["PCA_Threshold"]]
+  top_genes       <- ret$model[["top_genes"]]
+  data            <- ret$data[["data"]]
+  labels          <- ret$data[["labels"]]
+  trainRowNumbers <- ret$data[["trainRowNumbers"]]
   
   if (log_preprocess) {
     data <- log(1 + data)
@@ -144,7 +148,7 @@ for (row in 1:nrow(to_review)) {
     labels <- as.data.frame(labels)
   }
   
-  # Only needed when dataset_names is not model_name, i.e. oin caes of inter-set predicting 
+  # Only needed when dataset_names is not model_name, i.e. in case of inter-set predicting 
   # Check if there are top genes missing in the dataset, and if so provide dummy values 
   
   nr_missing_col <- 0
@@ -161,11 +165,8 @@ for (row in 1:nrow(to_review)) {
     }
     nr_missing_col <- length(missing_col)
   }
-  missing_col <- data.frame(ModelData = model_name, TestData = dataset_name, Missing = nr_missing_col)
+  missing_col  <- data.frame(ModelData = model_name, TestData = dataset_name, Missing = nr_missing_col)
   missing_cols <- rbind(missing_cols, missing_col)
-  
-  method <- "GBM"
-  model  <- model_gbm
   
   ######################################################################################################################
   # Do the actual predicting
@@ -344,19 +345,6 @@ for (row in 1:nrow(to_review)) {
   cat(sprintf("*************************************************************************************************************\n\n"))
   print(cm)
   
-  ######################################################################################################################
-  # Calculate median F1
-  ######################################################################################################################
-  
-  F1_1         <- cm[["byClass"]][,c("Precision","Recall")]
-  F1_2         <- F1_1[complete.cases(F1_1),]
-  if  (class(F1_2) == "numeric") {
-    F1_3         <- 2 * (F1_2["Precision"] * F1_2["Recall"]) / (F1_2["Precision"] + F1_2["Recall"])
-  } else {
-    F1_3         <- 2 * (F1_2[ , "Precision"] * F1_2[ , "Recall"]) / (F1_2[ ,"Precision"] + F1_2[ ,"Recall"])
-  }
-  medianF1     <- median(F1_3, na.rm = TRUE)
-  meanF1       <- mean(F1_3, na.rm = TRUE)
   
   ######################################################################################################################
   # Fill the report-out table
@@ -373,8 +361,8 @@ for (row in 1:nrow(to_review)) {
                              Accuracy     = Accuracy,
                              CorrAccuracy = CorrAccuracy,
                              Confidence   = mean(Predicted$Max),
-                             medianF1     = medianF1,
-                             meanF1       = meanF1) 
+                             medianF1     = median(cm[["byClass"]][,"F1"], na.rm = TRUE),
+                             meanF1       = mean(cm[["byClass"]][,"F1"], na.rm = TRUE)) 
    
   report_out   <- rbind(report_out, new)
 }

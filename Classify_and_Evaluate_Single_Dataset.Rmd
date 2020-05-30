@@ -69,6 +69,9 @@ library(gridExtra)
 library(caret)
 library(matrixStats)
 
+source("Code/Predict/read_model_and_data.R")
+source("Code/Predict/predict_model_with_labels.R")
+
 ```
 
 
@@ -115,9 +118,19 @@ if (preproc_method == "pp_pca")  {
 
 ```{r, read model and data .rData files}
 
-#-------------------------------------------
-source("Code/Predict/read_model_and_data.R")
-#-------------------------------------------
+ret <- read_model_and_data(rdata_path, model_name, preproc_method)
+preproc_model   <- ret$model[["preproc_model"]]
+model_svmRadial <- ret$model[["model_svmRadial"]]
+model_svmLinear <- ret$model[["model_svmLinear"]]
+model_rf        <- ret$model[["model_rf"]]
+model_gbm       <- ret$model[["model_gbm"]]
+model_glmnet    <- ret$model[["model_glmnet"]]
+features_limit  <- ret$model[["features_limit"]]
+PCA_Threshold   <- ret$model[["PCA_Threshold"]]
+top_genes       <- ret$model[["top_genes"]]
+data            <- ret$data[["data"]]
+labels          <- ret$data[["labels"]]
+trainRowNumbers <- ret$data[["trainRowNumbers"]]
 
 # In case the model and data set are the same, you do not want to predict on the whole dataset, but only on the part
 # that was not used for training. In that case eliminate the training records,
@@ -161,14 +174,14 @@ if (length(missing_col) > 0) {
 ```{r, Predict_svmRadial, fig.width = 6}
 
 if (PREDICT_SVMR && !is.null(model_svmRadial)) { 
-  method <- "SVMR"
-  model  <- model_svmRadial
-  
-  #-------------------------------------------------  
-  source("Code/Predict/predict_model_with_labels.R")
-  #-------------------------------------------------
-  
-  # Inspect Predicted, CorrectlyPredicted, IncorrectlyPredicted for detailed information
+  ret         <- predict_model_with_labels(method       = "SVMR",
+                                           model        = model_svmRadial, 
+                                           model_name   = model_name,
+                                           dataset_name = dataset_name,
+                                           data         = data, 
+                                           labels       = labels, 
+                                           report_out   = report_out)
+  report_out  <- ret$report_out
 }
 
 ```
@@ -178,32 +191,32 @@ if (PREDICT_SVMR && !is.null(model_svmRadial)) {
 ```{r, Predict_svmLinear, fig.width = 6}
 
 if (PREDICT_SVML && !is.null(model_svmLinear)) { 
-  method <- "SVML"
-  model  <- model_svmLinear
-  
-  #-------------------------------------------------  
-  source("Code/Predict/predict_model_with_labels.R")
-  #-------------------------------------------------
-  
-  # Inspect Predicted, CorrectlyPredicted, IncorrectlyPredicted for detailed information
+  ret         <- predict_model_with_labels(method       = "SVML",
+                                           model        = model_svmLinear, 
+                                           model_name   = model_name,
+                                           dataset_name = dataset_name,
+                                           data         = data, 
+                                           labels       = labels, 
+                                           report_out   = report_out)
+  report_out <- ret$report_out
 }
 
 ```
 
 
-## Predict RFl
+## Predict RF
 
 ```{r, Predict_RF, fig.width = 6}
 
 if (PREDICT_RF && !is.null(model_rf)) { 
-  method <- "RF"
-  model  <- model_rf
-  
-  #-------------------------------------------------  
-  source("Code/Predict/predict_model_with_labels.R")
-  #-------------------------------------------------
-  
-  # Inspect Predicted, CorrectlyPredicted, IncorrectlyPredicted for detailed information
+  ret         <- predict_model_with_labels(method       = "RF",
+                                           model        = model_rf, 
+                                           model_name   = model_name,
+                                           dataset_name = dataset_name,
+                                           data         = data, 
+                                           labels       = labels, 
+                                           report_out   = report_out)   
+  report_out <- ret$report_out
 }
 
 ```
@@ -214,14 +227,14 @@ if (PREDICT_RF && !is.null(model_rf)) {
 ```{r, Predict_GBM, fig.width = 6}
 
 if (PREDICT_GBM && !is.null(model_gbm)) { 
-  method <- "GBM"
-  model  <- model_gbm
-  
-  #-------------------------------------------------  
-  source("Code/Predict/predict_model_with_labels.R")
-  #-------------------------------------------------
-  
-  # Inspect Predicted, CorrectlyPredicted, IncorrectlyPredicted for detailed information
+  ret         <- predict_model_with_labels(method       = "GBM",
+                                           model        = model_gbm, 
+                                           model_name   = model_name,
+                                           dataset_name = dataset_name,
+                                           data         = data, 
+                                           labels       = labels, 
+                                           report_out   = report_out)   
+  report_out <- ret$report_out
 }
 
 ```
@@ -231,14 +244,14 @@ if (PREDICT_GBM && !is.null(model_gbm)) {
 ```{r, Predict_GLMNET, fig.width = 6}
 
 if (PREDICT_GLMNET && !is.null(model_glmnet)) { 
-  method <- "GLMNET"
-  model  <- model_glmnet
-  
-  #-------------------------------------------------  
-  source("Code/Predict/predict_model_with_labels.R")
-  #-------------------------------------------------
-  
-  # Inspect Predicted, CorrectlyPredicted, IncorrectlyPredicted for detailed information
+  ret         <- predict_model_with_labels(method       = "GLMNET",
+                                           model        = model_glmnet, 
+                                           model_name   = model_name,
+                                           dataset_name = dataset_name,
+                                           data         = data, 
+                                           labels       = labels, 
+                                           report_out   = report_out)   
+  report_out <- ret$report_out
 }
 
 ```

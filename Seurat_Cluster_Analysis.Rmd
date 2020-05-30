@@ -1,5 +1,5 @@
 ---
-title: "Train Models"
+title: "Cluster Analysis"
 output:
   html_document: default
   pdf_document: default
@@ -31,23 +31,19 @@ NULL
 
 ```{r}
 
-# Specify  which model to train
-dataset_name <- "Segerstolpe"
+# Specify  which model to analyse
+dataset_name <- "Baron_Mouse"
 
 # Select preprocessing
-
-preproc_method <- "pp_pca"
-preproc_method <- "pp_no_pca"
-preproc_method <- "pp_log_pca"
 
 preproc_method <- "pp_pca"
 
 # Specify which models should be run
 # Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
 
-TRAIN_SVML     <- TRUE
-TRAIN_SVMR     <- TRUE
-TRAIN_RF       <- TRUE
+TRAIN_SVML     <- FALSE
+TRAIN_SVMR     <- FALSE
+TRAIN_RF       <- FALSE
 TRAIN_GBM      <- TRUE
 TRAIN_GLMNET   <- FALSE
 
@@ -85,10 +81,6 @@ PCA_Threshold  <- 0.90          # The percentage variance explained by the PCA
 features_limit <- 1000          # The number of features that will be considered during the PCA
                                 # A high number uses the richness of the data set optimally, but makes processing slow
 
-# Note:
-#   TRAIN_GLMNET seems to bring the computer to its knees, especially wgen wroting the results. 
-#   Better to run Direct_Compare_Models where nothing is written 
-
 SAVE           <- TRUE
 
 ```
@@ -110,7 +102,7 @@ config_path <- file.path(proj_path, "config")
 
 # Initialise logging and timer
 logger.setup (infoLog = file.path(log_path, paste0(dataset_name, "_", 
-                                                   preproc_method, "_model.log")))
+                                                   preproc_method, "_cluster.log")))
 tic.clear()
 tic.clearlog()
 
@@ -183,7 +175,9 @@ ret                 <- process_config(min_class_size, minCount, maxCount, minFea
 ```
 
 
-# Seurat Find the Variable Genes 
+# Seurat processing
+
+## Find the Variable Genes 
 
 ```{r, variable_features, fig.height=5, message = FALSE, echo=FALSE}
 
@@ -224,7 +218,7 @@ rm(p1, p2)
 ```
 
 
-# Seurat analysis (optional)
+## Dimension reduction
 
 You can choose not to run this. It does not affext the training.
 
@@ -238,6 +232,60 @@ seurat_object  <- FindNeighbors(seurat_object, dims = 1:15)
 
 ```
 
+
+```{r, calc_coherence}
+
+calc_coherence <- function(seurat_object) {
+  
+  nr_of_clusters     <- length(levels(seurat_object@active.ident[1]))
+  cluster_table      <- data.frame()
+  weighted_coherence <- 0
+  
+  for (i in 0:(nr_of_clusters - 1)) {
+    
+    cluster  <- table(labels[WhichCells(seurat_object, idents = i),"ident"]) %>% 
+      as.data.frame() %>%
+      column_to_rownames(var = "Var1") %>%
+      t() %>%
+      as.data.frame() 
+    sc                 <- sum(cluster)
+    mc                 <- max(cluster)
+    cluster$Coherence  <- mc/sc
+    cluster$Count      <- sc
+    cluster            <- select(cluster, "Coherence", "Count", everything())
+    cluster_table      <- rbind(cluster_table, cluster)
+    weighted_coherence <- weighted_coherence + cluster$Coherence * cluster$Count
+  }
+  weighted_coherence   <- weighted_coherence / sum( cluster_table[, "Count"])
+  rownames(cluster_table) <- c(0: (dim(cluster_table)[1] - 1))
+  return ( list(cluster_table = cluster_table, 
+                weighted_coherence = weighted_coherence))
+}
+
+```
+
+
+```{r}
+
+find_best_resolution <- function(seurat_object) {
+  
+  coherence_table <- data.frame()
+  
+  for (cluster_resolution in seq(0.05, 1, by = 0.05)) {
+    seurat_object   <- FindClusters(seurat_object, resolution = cluster_resolution)
+    ret             <- calc_coherence(seurat_object)
+    row             <- data.frame(resolution = cluster_resolution, coherence = ret$weighted_coherence) 
+    coherence_table <- rbind(coherence_table, row)
+  }
+  max_coherence     <- max(coherence_table[,"coherence"])
+  
+  max_row           <- which(coherence_table$coherence == max_coherence)[1]
+  best_resolution   <- coherence_table[max_row, "resolution"]
+}
+
+```
+
+
 First run FindNeighbors to compute a snn graph
 If there is no pca information, this fails 
 Then find the clusters with FindClusters
@@ -247,23 +295,17 @@ A smaller number is less clusters
 Repeat this chunk until it looks you have the required number of clusters
 
 
+## Cluster
+
 ```{r, seurat_cluster, fig.height=5,}
 
 #table(labels$ident)
 sprintf("You'd expect a maximum of %d clusters\n\n", length(table(labels$ident)))
 sprintf("Check cluster resolution. Current value is %2.1f\n", cluster_resolution)
 
-#cluster_resolution <- 0.8
-seurat_object      <- FindClusters(seurat_object, resolution = cluster_resolution)
+cluster_resolution   <- find_best_resolution(seurat_object) 
+seurat_object        <- FindClusters(seurat_object, resolution = cluster_resolution)
 head(x = Idents(seurat_object), 8)
-
-cat(sprintf("\n\n Clusters have been formed. The coherence of the clusters is shown.\n")) 
-#print(cluster_info)
-cat(sprintf("\n\n"))
-
-# This only makes sense when the coherence is really high.....  
-# names(cluster_names) <- levels(seurat_object)
-# seurat_object        <- RenameIdents(seurat_object, unlist(cluster_names))
 
 xy                   <- as.data.frame(seurat_object@reductions[["umap"]]@cell.embeddings)
 class                <- as.data.frame(seurat_object@meta.data[["ident"]])
@@ -275,39 +317,58 @@ plot_data            <- cbind(xy, class, cluster)
 p1 <- ggplot(plot_data, aes(x = UMAP_1, y = UMAP_2, col = Cluster)) +
   geom_point(size = 0.3) +
   theme_light()
+
+nr_of_clusters <- length(levels(seurat_object@active.ident[1]))
+for (i in 0:(nr_of_clusters - 1)) {
+  cluster  <- labels[WhichCells(seurat_object, idents = i), "cell_id"]
+  length(cluster) 
+  cluster_coord   <- xy[cluster,]
+  cluster_center <- colMeans(cluster_coord)
+  p1 <- p1 + annotate("text", x = cluster_center[1], y = cluster_center[2], label= i)
+}
+
 p2 <- ggplot(plot_data, aes(x = UMAP_1, y = UMAP_2, col = Class)) +
   geom_point(size = 0.3) +
   theme_light()
 grid.arrange(p1, p2, nrow = 1)
 
+ret <- calc_coherence(seurat_object)
+print(ret$cluster_table)
+
 ```
 
 
-```{r, cluster_table}
+## Find marker genes for clusters
 
-nr_of_clusters <- length(levels(seurat_object@active.ident[1]))
-
-cluster_table  <- data.frame()
+```{r}
+marker_list <- list()
 
 for (i in 0:(nr_of_clusters - 1)) {
-  
-  # For each cluster Seurat found, inspect which classes there are 
-  cluster  <- table(labels[WhichCells(seurat_object, idents = i),"ident"]) %>% 
-    as.data.frame() %>%
-    column_to_rownames(var = "Var1") %>%
-    t() %>%
-    as.data.frame() 
-  sc <- sum(cluster)
-  mc <- max(cluster)
-  cluster$Coherence <- mc/sc
-  cluster <- select(cluster, "Coherence", everything())
-  cluster_table <- rbind(cluster_table, cluster)
+  markers <- FindMarkers(seurat_object, ident.1 = i, min.pct = 0.25, logfc.threshold = 0.25, only.pos = TRUE)
+  marker_list[[i+1]] = rownames(markers)
 }
-rownames(cluster_table) = c(0: (dim(cluster_table)[1] - 1))
-print(cluster_table)
+
+save(marker_list, file = file.path(rdata_path, paste0(dataset_name, "_marker_list.rData")))
 
 ```
 
+
+
+## Combine marker genes into top_genes
+
+```{r}
+
+limit     <- 50
+
+top_genes <- marker_list[[1]][1:limit]
+
+for (i in 2 : nr_of_clusters) {
+  top_genes <- union(top_genes, marker_list[[i]][1:limit])
+  print (length (top_genes))                   
+}
+
+
+```
 
 
 # Caret processing
@@ -328,7 +389,7 @@ tic(msg = "", quiet = TRUE)
 ```{r, create_sets}
 
 # Limit the data set to the number of genes specified in 'features_limit' (1000 has been found to be a good choice)
-ldata            <- as.data.frame(data[top_genes[1:features_limit]])
+ldata            <- as.data.frame(data[top_genes])
 ldata            <- cbind.data.frame(labels, ldata)
 ldata            <- ldata %>% select(-one_of("cell_id"))
 trainRowNumbers  <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)

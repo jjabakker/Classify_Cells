@@ -3,6 +3,9 @@
 The script does some preprocessing, then trains a GBM model on AMB data and then predicts against the test set.
 ######################################################################################################################
 '
+preproc_method <- "pp_pca"
+
+source("Code/Predict/predict_model_with_labels.R")
 
 labels$ident <- labels[ , classification_category] 
 labels       <- select(labels, ident, everything())
@@ -84,19 +87,15 @@ model_gbm     <- train(ident ~ .,
 # Predict and Evaluate
 ###########################################################################
 
-# A few interface variables need to be set in order to be able to call evaluate.R
+ret            <- predict_model_with_labels(method       = method,
+                                            model        = model_gbm, 
+                                            model_name   = dataset_name,
+                                            dataset_name = dataset_name,
+                                            data         = test_data, 
+                                            labels       = test_data[,1:2], 
+                                            report_out   = report_out)
 
-model_name     <- dataset_name
-model          <- model_gbm
-labels         <- test_data[,1:2]
-data           <- test_data
-
-
-preproc_method <- "pp_pca"
-
-#-------------------------------------------------
-source("Code/Predict/predict_model_with_labels.R")
-#-------------------------------------------------
+report_out     <- ret$report_out
 
 cat(sprintf("Percentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
             min_prob_value,

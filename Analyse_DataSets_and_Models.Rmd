@@ -30,14 +30,20 @@ config_path <- file.path(proj_path, "config")
 
 data_sets <- list(
   "Baron_Mouse",  # 1,886 cells, 14,861 genes
-  "Baron_Human",  # 8,569 cells, 17,499 genes
-  "Muraro",       # 2,122 cells, 18,915 genes  
-  "SegerStolpe",  # 2,133 cells, 22,757 genes
-  "Xin",          # 1,449 cells, 33,889 genes
-  "Zhou",         # 2,554 cells, 19,046 genes 
-  "Bo",           # 516   cells, 56,924 genes 
-  "Petropoulos1"  # 1,529 cells, 26,178 genes 
+  "Baron_Human"
+  # 8,569 cells, 17,499 genes
+  # "Muraro",       # 2,122 cells, 18,915 genes  
+  # "SegerStolpe",  # 2,133 cells, 22,757 genes
+  # "Xin",          # 1,449 cells, 33,889 genes
+  # "Zhou",         # 2,554 cells, 19,046 genes 
+  # "Bo",           # 516   cells, 56,924 genes 
+  # "Petropoulos1"  # 1,529 cells, 26,178 genes 
 )
+
+gene_names  <- list()
+class_names <- list()
+class_freq  <- list()
+top_genes   <- list()
 
 ```
 
@@ -45,15 +51,8 @@ data_sets <- list(
 
 ```{r, read data}
 
-
-
 if (READ_FRESH) {
 
-  gene_names  <- list()
-  class_names <- list()
-  class_freq  <- list()
-  top_genes   <- list()
-  
   # Read the data
   
   for (ii in 1:length(data_sets)) {
@@ -157,9 +156,9 @@ nr_shared_genes
 
 ```{r, total genes}
 
-total_genes <- gene_names[[1]]
+total_genes <- character()
 cat(sprintf("Length of set is %d\n", length(total_genes)))
-for (i in 2:length(gene_names)) {
+for (i in 1:length(gene_names)) {
   total_genes = union(total_genes, unlist(unlist(gene_names[[i]])))
   cat(sprintf("After adding %s Length of set is %d\n", names(gene_names[i]), length(total_genes)))
 }

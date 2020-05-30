@@ -62,6 +62,8 @@ library(gridExtra)
 library(caret)
 library(matrixStats)
 
+source("Code/Predict/read_model_and_data.R")
+
 ```
 
 
@@ -105,9 +107,20 @@ class_summaries <- list()
 
 ```{r, read model and data .rData files}
 
-#-------------------------------------------
-source("Code/Predict/read_model_and_data.R")
-#-------------------------------------------
+ret <- read_model_and_data(rdata_path, model_name, preproc_method)
+preproc_model   <- ret$model[["preproc_model"]]
+model_svmRadial <- ret$model[["model_svmRadial"]]
+model_svmLinear <- ret$model[["model_svmLinear"]]
+model_rf        <- ret$model[["model_rf"]]
+model_gbm       <- ret$model[["model_gbm"]]
+model_glmnet    <- ret$model[["model_glmnet"]]
+features_limit  <- ret$model[["features_limit"]]
+PCA_Threshold   <- ret$model[["PCA_Threshold"]]
+top_genes       <- ret$model[["top_genes"]]
+data            <- ret$data[["data"]]
+labels          <- ret$data[["labels"]]
+trainRowNumbers <- ret$data[["trainRowNumbers"]]
+
 
 # if the dataset to be predicted is the same as the dataset the model was generated with, split of the test data
 # if (model_name == dataset_name) {
