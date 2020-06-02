@@ -3,7 +3,7 @@
 The script does some preprocessing, then trains a GBM model on AMB data and then predicts against the test set.
 ######################################################################################################################
 '
-preproc_method <- "pp_pca"
+preproc_method <- "pca"
 
 source("Code/Predict/predict_model_with_labels.R")
 
@@ -87,13 +87,15 @@ model_gbm     <- train(ident ~ .,
 # Predict and Evaluate
 ###########################################################################
 
-ret            <- predict_model_with_labels(method       = method,
-                                            model        = model_gbm, 
-                                            model_name   = dataset_name,
-                                            dataset_name = dataset_name,
-                                            data         = test_data, 
-                                            labels       = test_data[,1:2], 
-                                            report_out   = report_out)
+ret            <- predict_model_with_labels(method         = method,
+                                            preproc_method = preproc_method,
+                                            model          = model_gbm,
+                                            preproc_model  = preproc_model,
+                                            model_name     = dataset_name,
+                                            dataset_name   = dataset_name,
+                                            data           = test_data, 
+                                            labels         = test_data[,1:2], 
+                                            report_out     = report_out)
 
 report_out     <- ret$report_out
 

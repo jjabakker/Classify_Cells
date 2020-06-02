@@ -1,0 +1,47 @@
+---
+title: "Compile Data"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Initialise
+
+```{r, libraries, message=FALSE}
+
+library(readr)
+library(tibble)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+
+library(data.table)
+library(matrixStats)
+
+source("Code/utilities.R")
+
+```
+
+
+```{r, general initialise, message=FALSE}
+
+report          <- data.frame()
+
+# Paths
+proj_path       <- file.path(".")
+data_path       <- file.path(proj_path, "DataSets")
+log_path        <- file.path(proj_path, "Logs")
+rdata_path      <- file.path(proj_path, "rData")
+config_path     <- file.path(proj_path, "config")
+
+
+```
+
+```{r}
+list.file(file.path(rdata_path, "ReportData"))
+for 
+```
+

@@ -26,11 +26,11 @@ dataset_name     <- "AMB"
 
 # Select preprocessing
 
-preproc_method   <- "pp_pca"
-preproc_method   <- "pp_no_pca"
-preproc_method   <- "pp_log_pca"
+preproc_method   <- "pca"
+preproc_method   <- "nopca"
+preproc_method   <- "logpca"
 
-preproc_method   <- "pp_log_pca"
+preproc_method   <- "logpca"
 ```
 
 ```{r, libraries, message=FALSE}
@@ -89,13 +89,13 @@ logger.setup (infoLog = file.path(log_path, "amb.log"))
 
 ```{r, set preprocess options}
 
-if (preproc_method == "pp_pca")  {
+if (preproc_method == "pca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center', 'pca')
-} else if (preproc_method == "pp_no_pca")  {
+} else if (preproc_method == "nopca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center')
-} else if (preproc_method == "pp_log_pca")  {
+} else if (preproc_method == "logpca")  {
   log_preprocess   <- TRUE
   caret_preprocess_method <- c('scale', 'center', 'pca')
 }

@@ -18,25 +18,23 @@ set.seed(1234)
 # Specify key use parameters
 
 Model options:
-Baron_Mouse,  1,886 cells, 14,861 genes
-Baron_Human,  8,569 cells, 17,499 genes
-Muraro,       2,122 cells, 18,915 genes  
-SegerStolpe,  2,133 cells, 22,757 genes
-Xin,          1,419 cells, 33,889 genes
-Zhou
-Bo
-Petropoulos1
-Petropoulos2
-NULL
+Baron_Mouse  # 1,886 cells, 14,861 genes
+Baron_Human  # 8,569 cells, 17,499 genes
+Muraro       # 2,122 cells, 18,915 genes
+SegerStolpe  # 2,133 cells, 22,757 genes
+Xin          # 1,449 cells, 33,889 genes
+Zhou         # 2,554 cells, 19,046 genes
+Bo           # 516   cells, 56,924 genes
+Petropoulos1 # 1,529 cells, 26,178 genes 
 
 ```{r}
 
 # Specify  which model to analyse
-dataset_name <- "Baron_Mouse"
+dataset_name   <- "Baron_Human"
 
 # Select preprocessing
 
-preproc_method <- "pp_pca"
+preproc_method <- "pca"
 
 # Specify which models should be run
 # Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
@@ -69,12 +67,13 @@ library(MazamaCoreUtils)        # Used for logging messages to a file
 
 source("Code/Train/read_dataset.R")
 source("Code/Train/process_config.R")
-source("Code/Train/seurat_cluster.R")
+source('Code/Train/cluster_utility.R')
 
 ```
 
 
 ```{r, General initialisation}
+
 PCA_Threshold  <- 0.90          # The percentage variance explained by the PCA
                                 # A high percentage requires more PC dimensions to be considered
 
@@ -111,13 +110,13 @@ tic.clearlog()
 
 ```{r, preprocess options}
 
-if (preproc_method == "pp_pca")  {
+if (preproc_method == "pca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center', 'pca')
-} else if (preproc_method == "pp_no_pca")  {
+} else if (preproc_method == "nopca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center')
-} else if (preproc_method == "pp_log_pca")  {
+} else if (preproc_method == "logpca")  {
   log_preprocess   <- TRUE
   caret_preprocess_method <- c('scale', 'center', 'pca')
 }
@@ -160,9 +159,10 @@ In a configuration file a set parameters are read in:
 
 ```{r}
 
-config_data <- read_config(config_path  = config_path,
-                           dataset_name = dataset_name)
-  
+ret                 <- read_config(config_path  = config_path,
+                                   dataset_name = dataset_name)
+config_data         <- ret$config_data
+
 min_class_size      <- config_data["min_class_size", "Value"]
 cluster_resolution  <- config_data["cluster_resolution", "Value"] 
 minCount            <- config_data["minCount", "Value"] 
@@ -170,7 +170,16 @@ maxCount            <- config_data["maxCount", "Value"]
 minFeature          <- config_data["minFeature", "Value"] 
 maxFeature          <- config_data["maxFeature", "Value"] 
 
-ret                 <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
+ret                 <- process_config(min_class_size, 
+                                      minCount, 
+                                      maxCount, 
+                                      minFeature, 
+                                      maxFeature, 
+                                      data, 
+                                      labels)
+
+data                <- ret$data
+labels              <- ret$labels
 
 ```
 
@@ -233,78 +242,24 @@ seurat_object  <- FindNeighbors(seurat_object, dims = 1:15)
 ```
 
 
-```{r, calc_coherence}
-
-calc_coherence <- function(seurat_object) {
-  
-  nr_of_clusters     <- length(levels(seurat_object@active.ident[1]))
-  cluster_table      <- data.frame()
-  weighted_coherence <- 0
-  
-  for (i in 0:(nr_of_clusters - 1)) {
-    
-    cluster  <- table(labels[WhichCells(seurat_object, idents = i),"ident"]) %>% 
-      as.data.frame() %>%
-      column_to_rownames(var = "Var1") %>%
-      t() %>%
-      as.data.frame() 
-    sc                 <- sum(cluster)
-    mc                 <- max(cluster)
-    cluster$Coherence  <- mc/sc
-    cluster$Count      <- sc
-    cluster            <- select(cluster, "Coherence", "Count", everything())
-    cluster_table      <- rbind(cluster_table, cluster)
-    weighted_coherence <- weighted_coherence + cluster$Coherence * cluster$Count
-  }
-  weighted_coherence   <- weighted_coherence / sum( cluster_table[, "Count"])
-  rownames(cluster_table) <- c(0: (dim(cluster_table)[1] - 1))
-  return ( list(cluster_table = cluster_table, 
-                weighted_coherence = weighted_coherence))
-}
-
-```
-
-
-```{r}
-
-find_best_resolution <- function(seurat_object) {
-  
-  coherence_table <- data.frame()
-  
-  for (cluster_resolution in seq(0.05, 1, by = 0.05)) {
-    seurat_object   <- FindClusters(seurat_object, resolution = cluster_resolution)
-    ret             <- calc_coherence(seurat_object)
-    row             <- data.frame(resolution = cluster_resolution, coherence = ret$weighted_coherence) 
-    coherence_table <- rbind(coherence_table, row)
-  }
-  max_coherence     <- max(coherence_table[,"coherence"])
-  
-  max_row           <- which(coherence_table$coherence == max_coherence)[1]
-  best_resolution   <- coherence_table[max_row, "resolution"]
-}
-
-```
-
-
 First run FindNeighbors to compute a snn graph
 If there is no pca information, this fails 
 Then find the clusters with FindClusters
 The resolution parameter determines how many clusters you get
 A smaller number is less clusters
 
-Repeat this chunk until it looks you have the required number of clusters
-
 
 ## Cluster
 
 ```{r, seurat_cluster, fig.height=5,}
 
-#table(labels$ident)
 sprintf("You'd expect a maximum of %d clusters\n\n", length(table(labels$ident)))
 sprintf("Check cluster resolution. Current value is %2.1f\n", cluster_resolution)
 
-cluster_resolution   <- find_best_resolution(seurat_object) 
-seurat_object        <- FindClusters(seurat_object, resolution = cluster_resolution)
+ret                  <- find_best_resolution(seurat_object)   
+best_resolution      <- ret$best_resolution
+seurat_object        <- FindClusters(seurat_object, 
+                                     resolution = best_resolution)
 head(x = Idents(seurat_object), 8)
 
 xy                   <- as.data.frame(seurat_object@reductions[["umap"]]@cell.embeddings)
@@ -314,25 +269,27 @@ cluster              <- as.data.frame(seurat_object@meta.data[["seurat_clusters"
 colnames(cluster)[1] <- "Cluster"
 plot_data            <- cbind(xy, class, cluster)
 
+ret                  <- calc_coherence(seurat_object)
+
 p1 <- ggplot(plot_data, aes(x = UMAP_1, y = UMAP_2, col = Cluster)) +
   geom_point(size = 0.3) +
   theme_light()
 
 nr_of_clusters <- length(levels(seurat_object@active.ident[1]))
 for (i in 0:(nr_of_clusters - 1)) {
-  cluster  <- labels[WhichCells(seurat_object, idents = i), "cell_id"]
+  cluster         <- labels[WhichCells(seurat_object, idents = i), "cell_id"]
   length(cluster) 
   cluster_coord   <- xy[cluster,]
-  cluster_center <- colMeans(cluster_coord)
-  p1 <- p1 + annotate("text", x = cluster_center[1], y = cluster_center[2], label= i)
+  cluster_center  <- colMeans(cluster_coord)
+  p1              <- p1 + annotate("text", x = cluster_center[1], y = cluster_center[2], label= i)
 }
 
 p2 <- ggplot(plot_data, aes(x = UMAP_1, y = UMAP_2, col = Class)) +
   geom_point(size = 0.3) +
   theme_light()
-grid.arrange(p1, p2, nrow = 1)
+title_string <- sprintf("Seurat-generated cluster for dataset %s with a weighted coherence of %3.1f%%", dataset_name, ret$weighted_coherence * 100)
+grid.arrange(p1, p2, nrow = 1, top = title_string)
 
-ret <- calc_coherence(seurat_object)
 print(ret$cluster_table)
 
 ```
@@ -359,7 +316,6 @@ save(marker_list, file = file.path(rdata_path, paste0(dataset_name, "_marker_lis
 ```{r}
 
 limit     <- 50
-
 top_genes <- marker_list[[1]][1:limit]
 
 for (i in 2 : nr_of_clusters) {
@@ -406,7 +362,7 @@ test_data        <- ldata[-trainRowNumbers,]
 
 # The data, labels and trainRowNumbers are saved. The variable trainRowNumbers is needed to create a test set
 
-if (SAVE) {
+if (FALSE) {
   data_information = list(
     data            = saved_data,
     labels          = saved_labels,
@@ -623,13 +579,13 @@ if (TRAIN_GBM) {
   # plot(varImp(model_gbm), main="Variable Importance")
   
   predicted_classes <- predict(model_gbm, pp_test_data[,-1])
-  cm <- confusionMatrix(pp_test_data[,1],
-                        predicted_classes,
-                        mode = "everything",
-                        dnn=c("Reference", "Predicted"))
+  cm                <- confusionMatrix(pp_test_data[,1],
+                                       predicted_classes,
+                                       mode = "everything",
+                                       dnn=c("Reference", "Predicted"))
   cm
-  gbm_accuracy <- cm[["overall"]][["Accuracy"]]
-  gbm_medianF1 <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)    
+  gbm_accuracy      <- cm[["overall"]][["Accuracy"]]
+  gbm_medianF1      <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)    
   
   toc(log=TRUE, quiet = TRUE)
   logger.info("Info: Finished training gbm with dataset %s. %s", dataset_name, tic.log()[[1]])
@@ -726,7 +682,7 @@ if (SAVE) {
   # Now save the models for later use
 
   save(model_information, 
-       file = file.path(rdata_path, paste0(dataset_name, "_models_", preproc_method, ".rData")))
+       file = file.path(rdata_path, paste0(dataset_name, "_c_models_", preproc_method, ".rData")))
 }
 
 ```

@@ -80,14 +80,12 @@ read_config <- function (config_path, dataset_name) {
   cat(sprintf("The maximum number of genes per cell is set to      : %d.\n", maxFeature))
   cat(sprintf("\n\n"))
   
-  
-  return(config_data )
+  return(list(config_data = config_data))
 }
 
 
 process_config <- function (min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels) {
   
- 
   ####################################################################################
   # If a class limit is set, remove cells of a class that is too small
   ####################################################################################
@@ -120,7 +118,6 @@ process_config <- function (min_class_size, minCount, maxCount, minFeature, maxF
   ####################################################################################
   
   # Compile the metadata from the count table
-  
   metaData     <-  data.frame(
     nCount_RNA   = rowSums(data),
     nFeature_RNA = (dim(data)[2] - rowCounts(as.matrix(data), value = 0))
@@ -132,7 +129,10 @@ process_config <- function (min_class_size, minCount, maxCount, minFeature, maxF
   p2 <- ggplot(metaData, aes(x=1, y = nCount_RNA)) + 
     geom_violin(aes(color="red"), show.legend = FALSE) + 
     geom_jitter(height = 0, width = 0.4)
-  grid.arrange(p1, p2, ncol=2)
+  
+  title_string <- sprintf("Plot 1: The data without limits")
+  grid.arrange(p1, p2, ncol=2, top = title_string)
+  
   
   p1 <- ggplot(metaData, aes(x=1, y = nFeature_RNA)) + 
     geom_violin(aes(color="green"), show.legend = FALSE) + 
@@ -148,23 +148,9 @@ process_config <- function (min_class_size, minCount, maxCount, minFeature, maxF
   if (maxCount != -1) {
     p2 <- p2 + geom_hline(yintercept = maxCount, col = 'red')
   }
-  grid.arrange(p1, p2, ncol=2)
+  title_string <- sprintf("Plot 2: The data with limits applied")
+  grid.arrange(p1, p2, ncol=2, top = title_string)
   
-  p1 <- ggplot(metaData, aes(x=1, y = nFeature_RNA)) + 
-    geom_violin(aes(color="green"), show.legend = FALSE) + 
-    geom_jitter(height = 0, width = 0.4) +
-    geom_hline(yintercept = minFeature, col = 'red')
-  if (maxFeature != -1) {
-    p1 <- p1 + geom_hline(yintercept = maxFeature, col = 'red')
-  }
-  p2 <- ggplot(metaData, aes(x=1, y = nCount_RNA)) + 
-    geom_violin(aes(color="green"), show.legend = FALSE) + 
-    geom_jitter(height = 0, width = 0.4) +
-    geom_hline(yintercept = minCount, col = 'red')  
-  if (maxCount != -1) {
-    p2 <- p2 + geom_hline(yintercept = maxCount, col = 'red')
-  }
-  grid.arrange(p1, p2, ncol=2)
   
   # Now select the cells to keep and which ones to drop
   cellIndex <- metaData$nCount_RNA   > minCount & 
@@ -210,6 +196,5 @@ process_config <- function (min_class_size, minCount, maxCount, minFeature, maxF
     cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i]))
   }
   
-  
-  return(list (data = data, labels = labels, config_data = config_data))
+  return(list (data = data, labels = labels))
 }

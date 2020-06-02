@@ -44,11 +44,10 @@ to_review <- tribble(
 )
 
 # Select preprocessing
-preproc_method   <- "pp_pca"
+preproc_method   <- "pca"
 
 # Select model
 method           <- "gbm"
-
 
 ```
 
@@ -79,13 +78,13 @@ source("Code/Predict/read_model_and_data.R")
 
 ```{r, set preprocess options}
 
-if (preproc_method == "pp_pca")  {
+if (preproc_method == "pca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center', 'pca')
-} else if (preproc_method == "pp_no_pca")  {
+} else if (preproc_method == "nopca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center')
-} else if (preproc_method == "pp_log_pca")  {
+} else if (preproc_method == "logpca")  {
   log_preprocess   <- TRUE
   caret_preprocess_method <- c('scale', 'center', 'pca')
 }
@@ -95,23 +94,22 @@ if (preproc_method == "pp_pca")  {
 
 ```{r, path to set and report_out}
 
-proj_path   <- file.path(".")
-data_path   <- file.path(proj_path, "DataSets")
-log_path    <- file.path(proj_path, "Logs")
-rdata_path  <- file.path(proj_path, "rData")
-config_path <- file.path(proj_path, "config")
+proj_path       <- file.path(".")
+data_path       <- file.path(proj_path, "DataSets")
+log_path        <- file.path(proj_path, "Logs")
+rdata_path      <- file.path(proj_path, "rData")
+config_path     <- file.path(proj_path, "config")
 
 # Initialise the report_out table
-report_out <- data.frame()
+report_out      <- data.frame()
 
 # Information of all the runs will be gathered in the class_summaries list  
 class_summaries <- list()
 
-missing_cols <- data.frame(ModelData = character(), TestData = character(), Missing = numeric())
+# Information of all missing genes is stored
+missing_cols    <- data.frame(ModelData = character(), TestData = character(), Missing = numeric())
 
 ```
-
-
 
 # Read and Predict 
 
@@ -122,16 +120,18 @@ missing_cols <- data.frame(ModelData = character(), TestData = character(), Miss
 
 for (row in 1:nrow(to_review)) {
   
-  # Set the data and model namde and read the data
-  model_name     <- to_review[row, "ModelData"]
-  dataset_name   <- to_review[row, "TestData"]
+  # Set the data and model name and read the data
+  model_name      <- to_review[row, "ModelData"]
+  dataset_name    <- to_review[row, "TestData"]
   
-  ret <- read_model_and_data(rdata_path, model_name, preproc_method)
+  ret <- read_model_and_data(rdata_path, model_name, dataset_name, preproc_method)
+  
   preproc_model   <- ret$model[["preproc_model"]]
   model           <- ret$model[["model_gbm"]]
   features_limit  <- ret$model[["features_limit"]]
   PCA_Threshold   <- ret$model[["PCA_Threshold"]]
   top_genes       <- ret$model[["top_genes"]]
+  
   data            <- ret$data[["data"]]
   labels          <- ret$data[["labels"]]
   trainRowNumbers <- ret$data[["trainRowNumbers"]]
@@ -183,21 +183,20 @@ for (row in 1:nrow(to_review)) {
   # Overrule the classification if the probability is too low
   ######################################################################################################################
   
-  min_prob_value <- 0.6
-  min_prob_ratio <- 4
-  prob_max       <- rowMaxs(as.matrix(probability))
-  prob_ratio     <- apply(probability,
-                          1,
-                          function (x) {
-                            sp = sort(x, decreasing = TRUE)
-                            return (sp[1]/sp[2])
-                          })
-  
+  min_prob_value               <- 0.6
+  min_prob_ratio               <- 4
+  prob_max                     <- rowMaxs(as.matrix(probability))
+  prob_ratio                   <- apply(probability,
+                                        1,
+                                        function (x) {
+                                          sp = sort(x, decreasing = TRUE)
+                                          return (sp[1]/sp[2])
+                                        })
   reliable                     <- prob_max > min_prob_value  | prob_ratio > min_prob_ratio
   corrected_classes            <- predicted_classes
   levels(corrected_classes)    <- c(levels(predicted_classes), "Unassigned")
   corrected_classes[!reliable] <- "Unassigned"
-  correct                      <-  as.character(predicted_classes) == as.character(labels[,1])
+  correct                      <- as.character(predicted_classes) == as.character(labels[,1])
   
   ######################################################################################################################
   # Get the prediction result nicely together in the 'Predicted' table
@@ -228,16 +227,7 @@ for (row in 1:nrow(to_review)) {
   # Store information in the class summary table
   ######################################################################################################################
   
-  class_summary <- data.frame(
-    average_prob    = numeric(),
-    prob_correct    = numeric(),
-    prob_incorrect  = numeric(),
-    prob_reliable   = numeric(),
-    prob_unreliable = numeric(),
-    nr_correct      = numeric(),
-    nr_incorrect    = numeric(),
-    nr_reliabe      = numeric(),
-    nr_unreliabe    = numeric())
+  class_summary <- data.frame()
   
   for (class in colnames(probability)) {
     new_rec = data.frame(
@@ -345,7 +335,6 @@ for (row in 1:nrow(to_review)) {
   cat(sprintf("*************************************************************************************************************\n\n"))
   print(cm)
   
-  
   ######################################################################################################################
   # Fill the report-out table
   ######################################################################################################################
@@ -387,7 +376,6 @@ report_out <- report_out %>%
   select(ModelData, TestData, medianF1) %>% 
   arrange(ModelData)
 
-
 report <- inner_join(report_out, missing_cols) %>%
   mutate(Genes = features_limit - Missing) %>%
   select(-Missing) %>%
@@ -409,7 +397,6 @@ ggplot(report, aes(x = TestData, y = medianF1)) +
 ggplot(report, aes(x = TestData, y = medianF1, fill = Model, dotsize = Genes)) +
   geom_dotplot(binaxis='y', 
                stackdir='center', 
-               #dotsize = 1,
                binwidth = .05,
                fill="red") +
   scale_y_continuous(limits = c(0, 1)) + 

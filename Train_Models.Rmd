@@ -10,6 +10,10 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+For a full suite you need to run this 24 times: 3 times for the preproc modes and 8 times for the datasets 
+You create 24 rData files containing each 4 models
+
+
 ```{r}
 rm(list = ls())
 set.seed(1234)
@@ -18,36 +22,35 @@ set.seed(1234)
 # Specify key use parameters
 
 Model options:
-Baron_Mouse,  1,886 cells, 14,861 genes
-Baron_Human,  8,569 cells, 17,499 genes
-Muraro,       2,122 cells, 18,915 genes  
-SegerStolpe,  2,133 cells, 22,757 genes
-Xin,          1,419 cells, 33,889 genes
-Zhou
-Bo
-Petropoulos1
-Petropoulos2
-NULL
+Baron_Mouse  # 1,886 cells, 14,861 genes
+Baron_Human  # 8,569 cells, 17,499 genes
+Muraro       # 2,122 cells, 18,915 genes
+SegerStolpe  # 2,133 cells, 22,757 genes
+Xin          # 1,449 cells, 33,889 genes
+Zhou         # 2,554 cells, 19,046 genes
+Bo           # 516   cells, 56,924 genes
+Petropoulos1 # 1,529 cells, 26,178 genes 
+
 
 ```{r}
 
 # Specify  which model to train
-dataset_name <- "Segerstolpe"
+dataset_name   <- "Baron_Human"
 
 # Select preprocessing
 
-preproc_method <- "pp_pca"
-preproc_method <- "pp_no_pca"
-preproc_method <- "pp_log_pca"
+preproc_method <- "pca"
+preproc_method <- "nopca"
+preproc_method <- "logpca"
 
-preproc_method <- "pp_pca"
+preproc_method <- "pca"
 
 # Specify which models should be run
 # Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
 
-TRAIN_SVML     <- TRUE
-TRAIN_SVMR     <- TRUE
-TRAIN_RF       <- TRUE
+TRAIN_SVML     <- FALSE
+TRAIN_SVMR     <- FALSE
+TRAIN_RF       <- FALSE
 TRAIN_GBM      <- TRUE
 TRAIN_GLMNET   <- FALSE
 
@@ -73,12 +76,13 @@ library(MazamaCoreUtils)        # Used for logging messages to a file
 
 source("Code/Train/read_dataset.R")
 source("Code/Train/process_config.R")
-source("Code/Train/seurat_cluster.R")
+source('Code/Train/cluster_utility.R')
 
 ```
 
 
 ```{r, General initialisation}
+
 PCA_Threshold  <- 0.90          # The percentage variance explained by the PCA
                                 # A high percentage requires more PC dimensions to be considered
 
@@ -89,7 +93,7 @@ features_limit <- 1000          # The number of features that will be considered
 #   TRAIN_GLMNET seems to bring the computer to its knees, especially wgen wroting the results. 
 #   Better to run Direct_Compare_Models where nothing is written 
 
-SAVE           <- TRUE
+SAVE           <- FALSE
 
 ```
 
@@ -119,13 +123,13 @@ tic.clearlog()
 
 ```{r, preprocess options}
 
-if (preproc_method == "pp_pca")  {
+if (preproc_method == "pca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center', 'pca')
-} else if (preproc_method == "pp_no_pca")  {
+} else if (preproc_method == "nopca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center')
-} else if (preproc_method == "pp_log_pca")  {
+} else if (preproc_method == "logpca")  {
   log_preprocess   <- TRUE
   caret_preprocess_method <- c('scale', 'center', 'pca')
 }
@@ -168,8 +172,9 @@ In a configuration file a set parameters are read in:
 
 ```{r}
 
-config_data <- read_config(config_path  = config_path,
-                           dataset_name = dataset_name)
+ret                 <- read_config(config_path  = config_path,
+                                   dataset_name = dataset_name)
+config_data         <- ret$config_data
   
 min_class_size      <- config_data["min_class_size", "Value"]
 cluster_resolution  <- config_data["cluster_resolution", "Value"] 
@@ -179,6 +184,8 @@ minFeature          <- config_data["minFeature", "Value"]
 maxFeature          <- config_data["maxFeature", "Value"] 
 
 ret                 <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
+data                <- ret$data
+labels              <- ret$labels
 
 ```
 
@@ -226,8 +233,6 @@ rm(p1, p2)
 
 # Seurat analysis (optional)
 
-You can choose not to run this. It does not affext the training.
-
 ```{r, seurat_init}
 
 seurat_object  <- ScaleData(seurat_object, features = rownames(seurat_object))
@@ -244,26 +249,16 @@ Then find the clusters with FindClusters
 The resolution parameter determines how many clusters you get
 A smaller number is less clusters
 
-Repeat this chunk until it looks you have the required number of clusters
-
 
 ```{r, seurat_cluster, fig.height=5,}
 
-#table(labels$ident)
 sprintf("You'd expect a maximum of %d clusters\n\n", length(table(labels$ident)))
 sprintf("Check cluster resolution. Current value is %2.1f\n", cluster_resolution)
 
-#cluster_resolution <- 0.8
-seurat_object      <- FindClusters(seurat_object, resolution = cluster_resolution)
+ret                  <- find_best_resolution(seurat_object) 
+best_resolution      <- ret$best_resolution
+seurat_object        <- FindClusters(seurat_object, resolution = best_resolution)
 head(x = Idents(seurat_object), 8)
-
-cat(sprintf("\n\n Clusters have been formed. The coherence of the clusters is shown.\n")) 
-#print(cluster_info)
-cat(sprintf("\n\n"))
-
-# This only makes sense when the coherence is really high.....  
-# names(cluster_names) <- levels(seurat_object)
-# seurat_object        <- RenameIdents(seurat_object, unlist(cluster_names))
 
 xy                   <- as.data.frame(seurat_object@reductions[["umap"]]@cell.embeddings)
 class                <- as.data.frame(seurat_object@meta.data[["ident"]])
@@ -275,37 +270,23 @@ plot_data            <- cbind(xy, class, cluster)
 p1 <- ggplot(plot_data, aes(x = UMAP_1, y = UMAP_2, col = Cluster)) +
   geom_point(size = 0.3) +
   theme_light()
+
+nr_of_clusters <- length(levels(seurat_object@active.ident[1]))
+for (i in 0:(nr_of_clusters - 1)) {
+  cluster  <- labels[WhichCells(seurat_object, idents = i), "cell_id"]
+  length(cluster) 
+  cluster_coord   <- xy[cluster,]
+  cluster_center <- colMeans(cluster_coord)
+  p1 <- p1 + annotate("text", x = cluster_center[1], y = cluster_center[2], label= i)
+}
+
 p2 <- ggplot(plot_data, aes(x = UMAP_1, y = UMAP_2, col = Class)) +
   geom_point(size = 0.3) +
   theme_light()
 grid.arrange(p1, p2, nrow = 1)
 
-```
-
-
-```{r, cluster_table}
-
-nr_of_clusters <- length(levels(seurat_object@active.ident[1]))
-
-cluster_table  <- data.frame()
-
-for (i in 0:(nr_of_clusters - 1)) {
-  
-  # For each cluster Seurat found, inspect which classes there are 
-  cluster  <- table(labels[WhichCells(seurat_object, idents = i),"ident"]) %>% 
-    as.data.frame() %>%
-    column_to_rownames(var = "Var1") %>%
-    t() %>%
-    as.data.frame() 
-  sc <- sum(cluster)
-  mc <- max(cluster)
-  cluster$Coherence <- mc/sc
-  cluster <- select(cluster, "Coherence", everything())
-  cluster_table <- rbind(cluster_table, cluster)
-}
-rownames(cluster_table) = c(0: (dim(cluster_table)[1] - 1))
-print(cluster_table)
-
+ret <- calc_coherence(seurat_object)
+print(ret$cluster_table)
 ```
 
 
@@ -374,15 +355,15 @@ test_data  <- test_data[, which(!nzv$zeroVar)]
 
 if (dim(train_data)[2] != ngenes) {
   cat(sprintf("\n\nFound invariable genes in the train dataset. Removed %d genes.\n", dim(train_data)[2] - ngenes))
+} else {
+  cat(sprintf("\n\nFound no invariable genes in the train dataset"))
 }
-
 ```
 
 
 ## Preprocess
 
 ```{r, prepocess}
-
 
 preproc_model <- preProcess(train_data, 
                             method  = caret_preprocess_method,
@@ -708,6 +689,7 @@ logger.info("      Median F1 of GBM is              : %3.1f%%", gbm_medianF1 * 1
 logger.info("      Median F1 of SVM Radial is       : %3.1f%%", svmr_medianF1 * 100)
 logger.info("      Median F1 of SVM Linear is       : %3.1f%%", svml_medianF1 * 100)
 logger.info("      Median F1 of GLMNET is           : %3.1f%%", glmnet_medianF1 * 100)
+
 ```
 
 

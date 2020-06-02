@@ -10,7 +10,16 @@ Preprocessing still needs to be done on the data
 '
 
 
-predict_model_with_labels <- function(method, model, model_name, dataset_name, data, labels, report_out) {
+predict_model_with_labels <- function(method,               # machine learning method
+                                      preproc_method,       # preprocessing method
+                                      model,                # trained model for prediction
+                                      preproc_model,        # trained model for preprocessing
+                                      model_name,           # the name of dataset the model was trained with
+                                      dataset_name,         # the name of dataset to be classified
+                                      data,                 # the dataset to be classified 
+                                      labels,               # the labels of the dataset to be classified
+                                      report_out) {         # the results table that  
+
   
   ######################################################################################################################
   # Do the actual predicting
@@ -165,8 +174,8 @@ predict_model_with_labels <- function(method, model, model_name, dataset_name, d
     theme_light() +
     theme(axis.text.x = element_text(angle = 45, hjust  = 1)) 
   
-  title_string <- sprintf("Dataset '%s' predicted with model data '%s', using method '%s' (%d features, PCA threshold of %2.1f)", 
-                          dataset_name, model_name, method, features_limit, PCA_Threshold)
+  title_string <- sprintf("Dataset '%s'- model '%s' - method '%s' - preprocessing %s  - %d features - PCA threshold of %2.1f)", 
+                          dataset_name, model_name, method, preproc_method, features_limit, PCA_Threshold)
   grid.arrange(p1, p2, ncol=2, top = title_string)
   
   
@@ -209,6 +218,7 @@ predict_model_with_labels <- function(method, model, model_name, dataset_name, d
                              meanF1       = mean(cm[["byClass"]][,"F1"], na.rm = TRUE)) 
    
   report_out   <- rbind(report_out, new)
+
   
   return (list(report_out        = report_out,
                predicted_classes = predicted_classes,

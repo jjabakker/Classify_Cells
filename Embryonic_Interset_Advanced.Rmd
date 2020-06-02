@@ -31,15 +31,15 @@ to_review <- tribble(
   
   "Zhou",                "Bo",
   "Zhou",                "Petropoulos1",
-  
+
   "Petropoulos1",        "Bo",
   "Petropoulos1",        "Zhou"
 )
 
 # Select preprocessing
-preproc_method   <- "pp_pca"
+preproc_method   <- "pca"
 
-#select model
+# Select model
 method           <- "gbm"
 
 ```
@@ -60,9 +60,10 @@ library(caret)
 library(data.table)
 library(matrixStats)
 library(tictoc)
-library(MazamaCoreUtils)        # Used for logging messages to a file
+library(MazamaCoreUtils)
 
 source("Code/Train/read_dataset.R")
+source("Code/Train/process_config.R")
 source("Code/Predict/predict_model_with_labels.R")
 source("Code/Predict/evaluate.R")
 
@@ -86,29 +87,32 @@ report_out      <- data.frame()
 class_summaries <- list()
 
 # Paths
-proj_path   <- file.path(".")
-data_path   <- file.path(proj_path, "DataSets")
-log_path    <- file.path(proj_path, "Logs")
-rdata_path  <- file.path(proj_path, "rData")
-config_path <- file.path(proj_path, "config")
+proj_path       <- file.path(".")
+data_path       <- file.path(proj_path, "DataSets")
+log_path        <- file.path(proj_path, "Logs")
+rdata_path      <- file.path(proj_path, "rData")
+config_path     <- file.path(proj_path, "config")
 
 # Logging and timer
 logger.setup (infoLog = file.path(log_path, paste0("advanced_interset.log")))
 
-gene_overlaps <- data.frame(ModelData = character(), TestData = character(), Genes = numeric())
+# gene_overlaps <- data.frame(ModelData = character(), TestData = character(), Genes = numeric())
+gene_overlaps <- data.frame()
+
+report_out    <- data.frame()
 
 ```
 
 
 ```{r, preprocess options}
 
-if (preproc_method == "pp_pca")  {
+if (preproc_method == "pca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center', 'pca')
-} else if (preproc_method == "pp_no_pca")  {
+} else if (preproc_method == "nopca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center')
-} else if (preproc_method == "pp_log_pca")  {
+} else if (preproc_method == "logpca")  {
   log_preprocess   <- TRUE
   caret_preprocess_method <- c('scale', 'center', 'pca')
 }
@@ -126,71 +130,51 @@ for (row in 1:nrow(to_review)) {
   dataset_for_model_name     <- as.character(to_review[row, "ModelData"])
   dataset_to_classify_name   <- as.character(to_review[row, "TestData"])
   
-  #----------------------------------
-  #dataset_name <- dataset_for_model_name
-  ret    <- read_dataset(data_path, dataset_for_model_name)
-  data   <- ret$data
-  labels <- ret$labels
-  #----------------------------------
+  ret                 <- read_dataset(data_path, dataset_for_model_name)
+  data_of_model       <- ret$data
+  labels_of_model     <- ret$labels
   
   if (log_preprocess) {
-    data <- log(1 + data)
+    data_of_model <- log(1 + data_of_model)
   }
   
-  # Remove small classes
-  min_class_size      <- 10
-  removed_classes     <- !(table(labels$ident) > min_class_size)
-  cells_to_keep       <- !(is.element(labels[,1], names(removed_classes)[removed_classes]))
-  ori                 <- dim(data)[1] 
-  data                <- data[cells_to_keep,]
-  labels              <- labels[cells_to_keep,]
-  labels$ident        <- factor(labels$ident)
-  rm(removed_classes, cells_to_keep)
+  # Process config
+  ret                 <- read_config(config_path  = config_path,
+                                     dataset_name = dataset_for_model_name)
+  config_data         <- ret$config_data
+  min_class_size      <- config_data["min_class_size", "Value"]
+  cluster_resolution  <- config_data["cluster_resolution", "Value"] 
+  minCount            <- config_data["minCount", "Value"] 
+  maxCount            <- config_data["maxCount", "Value"]
+  minFeature          <- config_data["minFeature", "Value"] 
+  maxFeature          <- config_data["maxFeature", "Value"] 
   
-  # Show composition
-  cat(sprintf("Information on dataset after removing small classes"))
-  cat(sprintf("Removed %d cells from small classes\n\n", ori - dim(data)[1] )) 
-  
-  cat(sprintf("There are %d cells and %d features.\n", dim(data)[1], dim(data)[2]))
-  for (i in 1:length(table(labels$ident))) {
-    cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i]))
-  }
-  cat(sprintf("\n"))
-  
-  # Remove genes that are 0 for all cells
-  genes_to_keep <- (colSums(data) != 0)
-  cat(sprintf("\n"))
-  ori           <- dim(data)[2]
-  data          <- data[, genes_to_keep]
-  
-  # Show composition
-  cat(sprintf("Information on processed dataset %s\n", dataset_for_model_name))
-  cat(sprintf("Removed %d all-zero genes\n\n",ori - dim(data)[2])) 
-  cat(sprintf("There are %d cells and %d features.\n\n", dim(data)[1], dim(data)[2]))
-  for (i in 1:length(table(labels$ident))) {
-    cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i]))
-  }
-  
-  # Save the model and labels for the model
-  data_of_model   <- data
-  labels_of_model <- labels
+  ret                 <- process_config(min_class_size, 
+                                        minCount, 
+                                        maxCount, 
+                                        minFeature, 
+                                        maxFeature, 
+                                        data_of_model, 
+                                        labels_of_model)
+  data_of_model       <- ret$data
+  labels_of_model     <- ret$labels
   
   # Find the Variable Genes 
-  seurat_object <- CreateSeuratObject(counts    = t(data_of_model),
-                                      meta.data = as.data.frame(labels_of_model),
-                                      min.cells = 5)
+  seurat_object       <- CreateSeuratObject(counts    = t(data_of_model),
+                                            meta.data = as.data.frame(labels_of_model),
+                                            min.cells = 5)
   
-  seurat_object <- NormalizeData(seurat_object, 
-                                 normalization.method = "LogNormalize", 
-                                 scale.factor = 1000000)
+  seurat_object       <- NormalizeData(seurat_object, 
+                                       normalization.method = "LogNormalize", 
+                                       scale.factor = 1000000)
   
-  seurat_object <- FindVariableFeatures(object           = seurat_object, 
-                                        selection.method = 'vst',
-                                        verbose          = TRUE,
-                                        nfeatures        = dim(data_of_model)[2])
+  seurat_object       <- FindVariableFeatures(object           = seurat_object, 
+                                              selection.method = 'vst',
+                                              verbose          = TRUE,
+                                              nfeatures        = dim(data_of_model)[2])
   
   # Identify the most highly variable genes
-  top_genes     <- VariableFeatures(seurat_object)
+  top_genes           <- VariableFeatures(seurat_object)
   
   # Show composition
   cat(sprintf("Information on dataset after variable gene determination of dataset %s\n", dataset_for_model_name))
@@ -198,41 +182,31 @@ for (row in 1:nrow(to_review)) {
   
   data_of_model = data_of_model[ , top_genes]
   cat(sprintf("\nThere are %d cells and %d features.\n", dim(data_of_model)[1], dim(data_of_model)[2]))
-  for (i in 1:length(table(labels$ident))) {
+  for (i in 1:length(table(labels_of_model$ident))) {
     cat(sprintf("%-25s %d\n", names(table(labels_of_model$ident)[i]), table(labels_of_model$ident)[i]))
   }
   cat(sprintf("\n"))
   
   # Determine which genes are present in the target set
+  # Set top_genes limit
+  top_genes          <- top_genes[1:features_limit ]
   
-  # set top_genes limit
-  top_genes <- top_genes[1:features_limit ]
+  ret                <- read_dataset(data_path, dataset_to_classify_name)
+  data_of_dataset    <- ret$data
+  labels_of_dataset  <- ret$labels
+  genes_in_data      <- colnames(data_of_dataset)
   
-  # Read the data of test set 
-  #----------------------------------
-  #dataset_name  <- dataset_to_classify_name
-  ret    <- read_dataset(data_path, dataset_to_classify_name)
-  data   <- ret$data
-  labels <- ret$labels
-  #----------------------------------
+  # Find the genes in top_genes that also occur in dataset
+  overlap_topgenes   <- intersect(top_genes, genes_in_data)
   
-  # Save data, labels and genes of dataset
-  data_of_dataset   <- data
-  labels_of_dataset <- labels
-  genes             <- colnames(data)
-  
-  # Find the genes in top_genes that do not occur in dataset
-  overlap_topgenes <- intersect(top_genes, genes)
-  
-  ## Train the model for dataset
-  
-  limit  <- length(overlap_topgenes)
-  
-  gene_overlap  <- data.frame(ModelData = dataset_for_model_name, TestData = dataset_to_classify_name, Genes = limit)
-  gene_overlaps <- rbind(gene_overlaps, gene_overlap)
+  ## Train the model for dataset with the top genes
+  limit              <- length(overlap_topgenes)
+  gene_overlap       <- data.frame(ModelData = dataset_for_model_name, 
+                                   TestData  = dataset_to_classify_name, 
+                                   Genes     = limit)
+  gene_overlaps      <- rbind(gene_overlaps, gene_overlap)
   
   # Limit the data set to the number of genes you know are available in the target set
-  
   ldata_of_model     <- as.data.frame(data_of_model[ , overlap_topgenes])
   ldata_of_model     <- cbind.data.frame(labels_of_model, ldata_of_model)
   ldata_of_model     <- ldata_of_model %>% select(-one_of("cell_id"))
@@ -241,12 +215,12 @@ for (row in 1:nrow(to_review)) {
   train_data         <- ldata_of_model[trainRowNumbers,]
   test_data          <- ldata_of_model[-trainRowNumbers,]
   
-  preproc_model      <- preProcess(train_data, 
+  ppm                <- preProcess(train_data, 
                                    method  = caret_preprocess_method,
                                    thresh  = PCA_Threshold,
                                    verbose = TRUE)
   
-  pp_train_data      <- predict(preproc_model, train_data)
+  pp_train_data      <- predict(ppm, train_data)
   
   model              <- train(ident ~ ., 
                               data      = pp_train_data, 
@@ -260,49 +234,55 @@ for (row in 1:nrow(to_review)) {
   # Predict and Evaluate against the own dataset
   ###########################################################################
   
-  ret               <- predict_model_with_labels(method       = method,
-                                                 model        = model, 
-                                                 model_name   = dataset_for_model_name,
-                                                 dataset_name = dataset_for_model_name,
-                                                 data         = test_data, 
-                                                 labels       = test_data[,1:2], 
-                                                 report_out   = report_out)
+  ret               <- predict_model_with_labels(method         = method,
+                                                 preproc_method = preproc_method,
+                                                 model          = model,
+                                                 preproc_model  = ppm,
+                                                 model_name     = dataset_for_model_name,
+                                                 dataset_name   = dataset_for_model_name,
+                                                 data           = test_data, 
+                                                 labels         = test_data[,1:2], 
+                                                 report_out     = report_out)
   report_out        <- ret$report_out
   predicted_classes <- ret$predicted_classes
- 
-  
-  # cat(sprintf("Percentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
-  #             min_prob_value,
-  #             correct_predicted_percentage,
-  #             correct_assigned_percentage,
-  #             unassigned_percentage))
+  class_summary     <- ret$class_summary
   
   cm <- confusionMatrix(test_data[,1],
                         predicted_classes,
                         mode = "everything",
-                        dnn = c("Reference", "Predicted"))
+                        dnn  = c("Reference", "Predicted"))
   print(cm)
-  gbm_accuracy <- cm[["overall"]][["Accuracy"]]
-  gbm_F1       <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  gbm_accuracy      <- cm[["overall"]][["Accuracy"]]
+  gbm_F1            <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
 
   print(class_summary)
   
   ## Then test dataset 
   
-  pp_data           <- predict(preproc_model, data_of_dataset)
+  pp_data           <- predict(ppm, data_of_dataset)
   predicted_classes <- predict(model, pp_data)
   probability       <- predict(model, pp_data, type = "prob")
 
-  evaluate(labels         = labels_of_dataset, 
-           method         = method, 
-           dataset_name   = dataset_to_classify_name, 
-           model_name     = dataset_for_model_name, 
-           features_limit = length(overlap_topgenes), 
-           probability    = probability)
+  ret               <- evaluate(labels         = labels_of_dataset, 
+                                method         = method, 
+                                dataset_name   = dataset_to_classify_name, 
+                                model_name     = dataset_for_model_name, 
+                                features_limit = length(overlap_topgenes), 
+                                probability    = probability,
+                                report_out     = report_out)
+  report_out        <- ret$report_out
 
   print(report_out)
 }
+
 ```
+
+```{r}
+
+save(report_out, file = file.path(rdata_path, "embryonic_advanced.rData"))
+
+```
+
 
 
 ```{r}
@@ -319,11 +299,13 @@ report
 ```
 
 ```{r}
+
 ggplot(report, aes(x =  TestData, y = medianF1)) +
   geom_bar(stat="identity", width = 0.6 ) +
   scale_y_continuous(limits = c(0, 1)) + 
   facet_grid(Model ~ .) +
   theme_light()
+
 ```
 
 

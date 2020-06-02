@@ -43,6 +43,7 @@ Logs/analysis-output.txt
 
 DataSets/AMB/
 
+dcm*.Rmd
 
 Logs/pp_pca_all_classify.txt
 

@@ -10,9 +10,10 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 rm(list = ls())
 
-library(data.table)
 library(plyr) 
+library(data.table)
 library(tidyverse)
+
 ```
 
 
@@ -40,10 +41,6 @@ data_bo             <- data_bo[,-c(2:6)]
 data_bo             <- column_to_rownames(data_bo, var = "Geneid")
 data_bo             <- t(data_bo)
 data_bo             <- as.data.frame(data_bo)
-# rownames(data_bo)   <- apply(as.matrix(rownames(data_bo)), 1, 
-#                              function(x) str_split(x, "_R1_val_1.fq.gz_STARAligned.out.bam")[[1]][1])
-# rownames(data_bo)   <- apply(as.matrix(rownames(data_bo)), 1, 
-#                              function(x) str_split(x, "_combined")[[1]][1])
 dim(data_bo)
 
 ```
@@ -57,10 +54,6 @@ labels_bo              <- as.data.frame(fread("../Import_Data/Bo/cell.lineage.cs
 labels_bo              <- labels_bo[, c("Phase", "V1")]
 labels_bo              <- as.data.frame(apply(as.matrix(labels_bo), 2, function(x) str_replace(x, "Untypical", "na")))
 labels_bo              <- column_to_rownames(labels_bo, var = "V1")
-# rownames(labels_bo)    <- apply(as.matrix(rownames(labels_bo)), 1, 
-#                                 function(x) str_split(x, "_R1_val_1.fq.gz_STARAligned.out.bam")[[1]][1])
-# rownames(labels_bo)    <- apply(as.matrix(rownames(labels_bo)), 1, 
-#                                 function(x) str_split(x, "_combined")[[1]][1])
 labels_bo[,"cell_id"]  <- rownames(labels_bo)
 colnames(labels_bo)[1] <- "ident"
 dim(labels_bo)
@@ -124,7 +117,6 @@ rownames(data_zhou) <- rownames(labels_zhou)
 
 ```{r}
 
-
 write.csv(labels_zhou[ ,1], "DataSets/Zhou/labels.csv", row.names = FALSE)
 write.csv(data_zhou,        "DataSets/Zhou/data.csv",   row.names = TRUE)
 
@@ -177,6 +169,7 @@ labels_petr[ , "ident"] <- apply(as.matrix(labels_petr[ , "ident"]), 2, function
 
 rownames(data_petr1) <- rownames(labels_petr)
 rownames(data_petr2) <- rownames(labels_petr)
+
 ```
 
 

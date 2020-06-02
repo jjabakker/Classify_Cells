@@ -5,7 +5,7 @@
 
 '
 
-evaluate <- function(labels, method, dataset_name, model_name, features_limit, probability) {
+evaluate <- function(labels, method, dataset_name, model_name, features_limit, probability, report_out) {
   
   min_prob_value = 0.6
   min_prob_ratio = 4
@@ -61,16 +61,17 @@ evaluate <- function(labels, method, dataset_name, model_name, features_limit, p
   
   for (class in colnames(probability)) {
     new_rec = data.frame(
-      average_prob = mean(Predicted[which((Predicted$PredictedClass == class)), "Max"]),
-      prob_correct = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == TRUE)), "Max"]),
-      prob_incorrect = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == FALSE)), "Max"]),
-      prob_reliable = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == TRUE)), "Max"]),
+      average_prob    = mean(Predicted[which((Predicted$PredictedClass == class)), "Max"]),
+      prob_correct    = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == TRUE)), "Max"]),
+      prob_incorrect  = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == FALSE)), "Max"]),
+      prob_reliable   = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == TRUE)), "Max"]),
       prob_unreliable = mean(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == FALSE)), "Max"]),
         
-      nr_correct = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == TRUE)), ]),
-      nr_incorrect = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == FALSE)), ]),
-      nr_reliabe = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == TRUE)), ]),
-      nr_unreliabe = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == FALSE)), ]))
+      nr_correct      = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == TRUE)), ]),
+      nr_incorrect    = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Correct == FALSE)), ]),
+      nr_reliabe      = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == TRUE)), ]),
+      nr_unreliabe    = nrow(Predicted[which((Predicted$PredictedClass == class) & (Predicted$Reliable == FALSE)), ]))
+    
     rownames(new_rec) <- class
     if ((new_rec$nr_correct + new_rec$nr_incorrect) != 0) {
       class_summary <- rbind(class_summary, new_rec)
@@ -96,18 +97,18 @@ evaluate <- function(labels, method, dataset_name, model_name, features_limit, p
   p1 <- ggplot() + 
     geom_jitter(data = CorrectlyPredicted, 
                 mapping = aes(x = PredictedClass, y = Max),
-                width = 0.3,
-                height = 0,
-                alpha = 0.7,
-                size  = 0.6,
-                color = 'green') +
+                width   = 0.3,
+                height  = 0,
+                alpha   = 0.7,
+                size    = 0.6,
+                color   = 'green') +
     geom_jitter(data = IncorrectlyPredicted, 
                 mapping = aes(x = PredictedClass, y = Max),
-                width = 0.3,
-                height = 0,
-                alpha = 0.7,
-                size  = 0.6,
-                color = 'red') +
+                width   = 0.3,
+                height  = 0,
+                alpha   = 0.7,
+                size    = 0.6,
+                color   = 'red') +
     labs(x = "Predicted") +
     labs(y = "Probability of prediction") +
     scale_y_continuous(limits = c(0, 1.0), breaks = seq(0, 1.0, 0.1)) +
@@ -117,18 +118,18 @@ evaluate <- function(labels, method, dataset_name, model_name, features_limit, p
   p2 <- ggplot() + 
     geom_jitter(data = CorrectlyPredicted, 
                 mapping = aes(x = ReferenceClass, y = Max),
-                width = 0.3,
-                height = 0,
-                alpha = 0.7,
-                size  = 0.6,
-                color = 'green') +
+                width   = 0.3,
+                height  = 0,
+                alpha   = 0.7,
+                size    = 0.6,
+                color   = 'green') +
     geom_jitter(data = IncorrectlyPredicted, 
                 mapping = aes(x = ReferenceClass, y = Max),
-                width = 0.3,
-                height = 0,
-                alpha = 0.7, 
-                size  = 0.6,
-                color = 'red') +
+                width   = 0.3,
+                height  = 0,
+                alpha   = 0.7, 
+                size    = 0.6,
+                color   = 'red') +
     labs(x = "Reference") +
     labs(y = "Probability of prediction") +
     scale_y_continuous(limits = c(0, 1.0), breaks = seq(0, 1.0, 0.1)) +
@@ -200,5 +201,6 @@ evaluate <- function(labels, method, dataset_name, model_name, features_limit, p
                              meanF1       = mean(cm[["byClass"]][,"F1"], na.rm = TRUE)) 
   
   report_out   <- rbind(report_out, new)
+  return (list(report_out = report_out))
 
 }

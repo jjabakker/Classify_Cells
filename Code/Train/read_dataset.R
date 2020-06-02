@@ -14,11 +14,11 @@ The script returns two dataframes:
    data
    labels (with one column named "ident", and a second colum cell_id (equal to the rownames)
 
-Both data frames fold as row name the cell id. 
+Both data frames hold as row name the cell id. 
 ######################################################################################################################
 '
 
-read_dataset <-function (data_path, dataset_name) {
+read_dataset <- function (data_path, dataset_name) {
    
    # Set timer
    logger.info("Info: Started reading data from dataset %s", dataset_name)
@@ -83,6 +83,7 @@ read_dataset <-function (data_path, dataset_name) {
    logger.info("Info: Finished reading data from dataset %s%s", dataset_name, tic.log()[[1]])
    tic.clearlog()
    
-   return (list(data = data, labels = labels))
+   return (list(data   = data, 
+                labels = labels))
 }
   

@@ -38,14 +38,14 @@ Model and datset options are:
 
 # Select dataset and model
 
-dataset_name   <- "Bo"
-model_name     <- "Bo"
+dataset_name     <- "Bo"
+model_name       <- "Bo"
 
 # Select preprocessing
 
-preproc_method   <- "pp_no_pca"
-preproc_method   <- "pp_log_pca"
-preproc_method   <- "pp_pca"
+preproc_method   <- "nopca"
+preproc_method   <- "logpca"
+preproc_method   <- "pca"
 
 # Specify which models should be run
 # Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
@@ -78,18 +78,14 @@ source("Code/Predict/predict_model_with_labels.R")
 ```{r, general initialisation}
 
 # Set directory paths  
-proj_path   <- file.path(".")
-data_path   <- file.path(proj_path, "DataSets")
-log_path    <- file.path(proj_path, "Logs")
-rdata_path  <- file.path(proj_path, "rData")
-config_path <- file.path(proj_path, "config")
+proj_path       <- file.path(".")
+data_path       <- file.path(proj_path, "DataSets")
+log_path        <- file.path(proj_path, "Logs")
+rdata_path      <- file.path(proj_path, "rData")
+config_path     <- file.path(proj_path, "config")
 
 # Summary results will be kept here 
-report_out <- data.frame(Method     = character(),
-                         ModelData  = character(),
-                         TestData   = character(),
-                         Accuracy   = numeric(),
-                         Confidence = numeric())
+report_out      <- data.frame()
 
 # Information of all the runs will be gathered in the class_summaries list  
 class_summaries <- list()
@@ -99,13 +95,13 @@ class_summaries <- list()
 
 ```{r, preprocess options}
 
-if (preproc_method == "pp_pca")  {
+if (preproc_method == "pca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center', 'pca')
-} else if (preproc_method == "pp_no_pca")  {
+} else if (preproc_method == "nopca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center')
-} else if (preproc_method == "pp_log_pca")  {
+} else if (preproc_method == "logpca")  {
   log_preprocess   <- TRUE
   caret_preprocess_method <- c('scale', 'center', 'pca')
 }
@@ -118,7 +114,8 @@ if (preproc_method == "pp_pca")  {
 
 ```{r, read model and data .rData files}
 
-ret <- read_model_and_data(rdata_path, model_name, preproc_method)
+ret             <- read_model_and_data(rdata_path, model_name, dataset_name, preproc_method)
+
 preproc_model   <- ret$model[["preproc_model"]]
 model_svmRadial <- ret$model[["model_svmRadial"]]
 model_svmLinear <- ret$model[["model_svmLinear"]]
@@ -128,6 +125,7 @@ model_glmnet    <- ret$model[["model_glmnet"]]
 features_limit  <- ret$model[["features_limit"]]
 PCA_Threshold   <- ret$model[["PCA_Threshold"]]
 top_genes       <- ret$model[["top_genes"]]
+
 data            <- ret$data[["data"]]
 labels          <- ret$data[["labels"]]
 trainRowNumbers <- ret$data[["trainRowNumbers"]]
@@ -174,13 +172,15 @@ if (length(missing_col) > 0) {
 ```{r, Predict_svmRadial, fig.width = 6}
 
 if (PREDICT_SVMR && !is.null(model_svmRadial)) { 
-  ret         <- predict_model_with_labels(method       = "SVMR",
-                                           model        = model_svmRadial, 
-                                           model_name   = model_name,
-                                           dataset_name = dataset_name,
-                                           data         = data, 
-                                           labels       = labels, 
-                                           report_out   = report_out)
+  ret         <- predict_model_with_labels(method         = "SVMR",
+                                           preproc_method = preproc_method,
+                                           model          = model_svmRadial,
+                                           preproc_model  = preproc_model,
+                                           model_name     = model_name,
+                                           dataset_name   = dataset_name,
+                                           data           = data, 
+                                           labels         = labels, 
+                                           report_out     = report_out)
   report_out  <- ret$report_out
 }
 
@@ -191,13 +191,15 @@ if (PREDICT_SVMR && !is.null(model_svmRadial)) {
 ```{r, Predict_svmLinear, fig.width = 6}
 
 if (PREDICT_SVML && !is.null(model_svmLinear)) { 
-  ret         <- predict_model_with_labels(method       = "SVML",
-                                           model        = model_svmLinear, 
-                                           model_name   = model_name,
-                                           dataset_name = dataset_name,
-                                           data         = data, 
-                                           labels       = labels, 
-                                           report_out   = report_out)
+  ret         <- predict_model_with_labels(method         = "SVML",
+                                           preproc_method = preproc_method,
+                                           model          = model_svmLinear, 
+                                           preproc_model  = preproc_model,
+                                           model_name     = model_name,
+                                           dataset_name   = dataset_name,
+                                           data           = data, 
+                                           labels         = labels, 
+                                           report_out     = report_out)
   report_out <- ret$report_out
 }
 
@@ -209,13 +211,15 @@ if (PREDICT_SVML && !is.null(model_svmLinear)) {
 ```{r, Predict_RF, fig.width = 6}
 
 if (PREDICT_RF && !is.null(model_rf)) { 
-  ret         <- predict_model_with_labels(method       = "RF",
-                                           model        = model_rf, 
-                                           model_name   = model_name,
-                                           dataset_name = dataset_name,
-                                           data         = data, 
-                                           labels       = labels, 
-                                           report_out   = report_out)   
+  ret         <- predict_model_with_labels(method         = "RF",
+                                           preproc_method = preproc_method,
+                                           model          = model_rf, 
+                                           preproc_model  = preproc_model,
+                                           model_name     = model_name,
+                                           dataset_name   = dataset_name,
+                                           data           = data, 
+                                           labels         = labels, 
+                                           report_out     = report_out)   
   report_out <- ret$report_out
 }
 
@@ -227,13 +231,15 @@ if (PREDICT_RF && !is.null(model_rf)) {
 ```{r, Predict_GBM, fig.width = 6}
 
 if (PREDICT_GBM && !is.null(model_gbm)) { 
-  ret         <- predict_model_with_labels(method       = "GBM",
-                                           model        = model_gbm, 
-                                           model_name   = model_name,
-                                           dataset_name = dataset_name,
-                                           data         = data, 
-                                           labels       = labels, 
-                                           report_out   = report_out)   
+  ret         <- predict_model_with_labels(method         = "GBM",
+                                           preproc_method = preproc_method,
+                                           model          = model_gbm, 
+                                           preproc_model  = preproc_model,
+                                           model_name     = model_name,
+                                           dataset_name   = dataset_name,
+                                           data           = data, 
+                                           labels         = labels, 
+                                           report_out     = report_out)   
   report_out <- ret$report_out
 }
 
@@ -244,13 +250,15 @@ if (PREDICT_GBM && !is.null(model_gbm)) {
 ```{r, Predict_GLMNET, fig.width = 6}
 
 if (PREDICT_GLMNET && !is.null(model_glmnet)) { 
-  ret         <- predict_model_with_labels(method       = "GLMNET",
-                                           model        = model_glmnet, 
-                                           model_name   = model_name,
-                                           dataset_name = dataset_name,
-                                           data         = data, 
-                                           labels       = labels, 
-                                           report_out   = report_out)   
+  ret         <- predict_model_with_labels(method         = "GLMNET",
+                                           preproc_method = preproc_method,
+                                           model          = model_glmnet,
+                                           preproc_model  = preproc_model,
+                                           model_name     = model_name,
+                                           dataset_name   = dataset_name,
+                                           data           = data, 
+                                           labels         = labels, 
+                                           report_out     = report_out)   
   report_out <- ret$report_out
 }
 
@@ -303,6 +311,7 @@ rownames(ro1) <- unique(ro$Method)
 knitr::kable(ro1, digits = 2, caption = "median F1")
 
 ro1
+
 ```
 
 

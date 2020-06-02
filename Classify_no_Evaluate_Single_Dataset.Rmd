@@ -19,26 +19,27 @@ rm(list = ls())
 
 Model and datset options are:
 
-"Baron_Mouse"
-"Segerstolpe"
-"Muraro"
-"Xin"
-"c_Muraro_Segerstolpe"
-"c_Xin_Segerstolpe"
-"Zhou"
+Baron_Mouse  # 1,886 cells, 14,861 genes
+Baron_Human  # 8,569 cells, 17,499 genes
+Muraro       # 2,122 cells, 18,915 genes
+SegerStolpe  # 2,133 cells, 22,757 genes
+Xin          # 1,449 cells, 33,889 genes
+Zhou         # 2,554 cells, 19,046 genes
+Bo           # 516   cells, 56,924 genes
+Petropoulos1 # 1,529 cells, 26,178 genes 
 
 ```{r}
 
 # Select dataset and model
 
-dataset_name <- "Baron_Mouse"
-model_name   <- "Baron_Mouse"
+dataset_name     <- "Baron_Mouse"
+model_name       <- "Baron_Mouse"
 
 # Select preprocessing
 
-preproc_method   <- "pp_no_pca"
-preproc_method   <- "pp_log_pca"
-preproc_method   <- "pp_pca"
+preproc_method   <- "nopca"
+preproc_method   <- "logpca"
+preproc_method   <- "pca"
 
 # Specify which models should be run
 # Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
@@ -47,8 +48,7 @@ PREDICT_SVML    <- TRUE
 PREDICT_SVMR    <- TRUE
 PREDICT_RF      <- TRUE
 PREDICT_GBM     <- TRUE 
-PREDICT_GBM_NP  <- TRUE 
-PREDICT_GLMNET  <- TRUE
+PREDICT_GLMNET  <- FALSE
 
 ```
 
@@ -63,19 +63,20 @@ library(caret)
 library(matrixStats)
 
 source("Code/Predict/read_model_and_data.R")
+source("Code/Predict/display_results.R") 
 
 ```
 
 
 ```{r, preprocess options}
 
-if (preproc_method == "pp_pca")  {
+if (preproc_method == "pca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center', 'pca')
-} else if (preproc_method == "pp_no_pca")  {
+} else if (preproc_method == "nopca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center')
-} else if (preproc_method == "pp_log_pca")  {
+} else if (preproc_method == "logpca")  {
   log_preprocess   <- TRUE
   caret_preprocess_method <- c('scale', 'center', 'pca')
 }
@@ -92,14 +93,11 @@ rdata_path  <- file.path(proj_path, "rData")
 config_path <- file.path(proj_path, "config")   
 
 # Summary results will be kept here 
-report_out <- data.frame(Method     = character(),
-                         ModelData  = character(),
-                         TestData   = character(),
-                         Accuracy   = numeric(),
-                         Confidence = numeric())
+report_out <- data.frame()
 
 # Information of all the runs will be gathered in the class_summaries list  
 class_summaries <- list()
+
 ```
 
 
@@ -107,7 +105,8 @@ class_summaries <- list()
 
 ```{r, read model and data .rData files}
 
-ret <- read_model_and_data(rdata_path, model_name, preproc_method)
+ret <- read_model_and_data(rdata_path, model_name, dataset_name, preproc_method)
+
 preproc_model   <- ret$model[["preproc_model"]]
 model_svmRadial <- ret$model[["model_svmRadial"]]
 model_svmLinear <- ret$model[["model_svmLinear"]]
@@ -117,17 +116,10 @@ model_glmnet    <- ret$model[["model_glmnet"]]
 features_limit  <- ret$model[["features_limit"]]
 PCA_Threshold   <- ret$model[["PCA_Threshold"]]
 top_genes       <- ret$model[["top_genes"]]
+
 data            <- ret$data[["data"]]
 labels          <- ret$data[["labels"]]
 trainRowNumbers <- ret$data[["trainRowNumbers"]]
-
-
-# if the dataset to be predicted is the same as the dataset the model was generated with, split of the test data
-# if (model_name == dataset_name) {
-#   data   <- data[-trainRowNumbers,]
-#   labels <- labels[-trainRowNumbers,]
-#   labels <- as.data.frame(labels)
-# }
 
 if (log_preprocess) {
   data <- log(1 + data)
@@ -155,8 +147,6 @@ if (length(missing_col) > 0) {
 ```
 
 
-At this stage you have two dataframes, hoding all the info: data and labels 
-
 # Predict and analyse the result
 
 
@@ -171,11 +161,10 @@ if (PREDICT_SVMR && !is.null(model_svmRadial)) {
   predicted_classes <- predict(model_svmRadial, pp_data)
   probability       <- predict(model_svmRadial, pp_data, type = "prob")
   
-  #---------------------------------------
-  source("Code/Predict/display_results.R") 
-  #---------------------------------------
+  ret               <- display_results(probability, class_summaries)
+  class_summaries   <- ret$class_summaries
   
-  plot_result
+  ret$plot_result
 }
 
 ```
@@ -192,11 +181,10 @@ if (PREDICT_SVML && !is.null(model_svmLinear)) {
   predicted_classes <- predict(model_svmLinear, pp_data)
   probability       <- predict(model_svmLinear, pp_data, type = "prob")
   
-  #---------------------------------------
-  source("Code/Predict/display_results.R") 
-  #---------------------------------------
+  ret               <- display_results(probability, class_summaries)
+  class_summaries   <- ret$class_summaries
   
-  plot_result
+  ret$plot_result
 }
 
 ```
@@ -212,12 +200,12 @@ if (PREDICT_RF && !is.null(model_rf)) {
   predicted_classes <- predict(model_rf, pp_data)
   probability       <- predict(model_rf, pp_data, type = "prob")
   
-  #---------------------------------------
-  source("Code/Predict/display_results.R") 
-  #---------------------------------------
+  ret               <- display_results(probability, class_summaries)
+  class_summaries   <- ret$class_summaries
   
-  plot_result
+  ret$plot_result
 }
+
 ```
 
 
@@ -232,31 +220,14 @@ if (PREDICT_GBM && !is.null(model_gbm)) {
   predicted_classes <- predict(model_gbm, pp_data)
   probability       <- predict(model_gbm, pp_data, type = "prob")
    
-  source("Code/Predict/display_results.R") 
-  plot_result
+  ret               <- display_results(probability, class_summaries)
+  class_summaries   <- ret$class_summaries
+  
+  ret$plot_result
 }
 
 ```
 
-## Predict GBM_NP
-
-```{r, model_gbm_np, fig.width = 5}
-
-if (PREDICT_GBM_NP && !is.null(model_gbm_np)) { 
-
-  method            <- "GBM_NP" 
-  predicted_classes <- predict(model_gbm_np, data)
-  probability       <- predict(model_gbm_np, data, type = "prob")
-  
-  #---------------------------------------
-  source("Code/Predict/display_results.R") 
-  #---------------------------------------
-  
-  plot_result
-  
-}
-
-```
 
 
 ## Predict GLMNET
@@ -269,11 +240,10 @@ if (PREDICT_GLMNET && !is.null(model_glmnet)) {
   predicted_classes <- predict(model_glmnet, data)
   probability       <- predict(model_glmnet, data, type = "prob")
   
-  #---------------------------------------
-  source("Code/Predict/display_results.R") 
-  #---------------------------------------
+  ret               <- display_results(probability, class_summaries)
+  class_summaries   <- ret$class_summaries
   
-  plot_result
+  ret$plot_result
   
 }
 

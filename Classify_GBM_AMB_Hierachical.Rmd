@@ -20,7 +20,7 @@ set.seed(1234)
 
 ```{r}
 
-preproc_method   <-  "pp_pca"
+preproc_method   <-  "pca"
 
 dataset_name     <- "AMB"
 
@@ -42,7 +42,7 @@ library(caret)
 library(data.table)
 library(matrixStats)
 library(tictoc)
-library(MazamaCoreUtils)        # Used for logging messages to a file
+library(MazamaCoreUtils)      
 library(ggraph)
 library(data.tree)
 library(DiagrammeR)
@@ -92,13 +92,13 @@ amb_list         <- list()
 
 ```{r, preprocess options}
 
-if (preproc_method == "pp_pca")  {
+if (preproc_method == "pca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center', 'pca')
-} else if (preproc_method == "pp_no_pca")  {
+} else if (preproc_method == "nopca")  {
   log_preprocess   <- FALSE
   caret_preprocess_method <- c('scale', 'center')
-} else if (preproc_method == "pp_log_pca")  {
+} else if (preproc_method == "logpca")  {
   log_preprocess   <- TRUE
   caret_preprocess_method <- c('scale', 'center', 'pca')
 } else {
@@ -308,6 +308,7 @@ labels_to_be_used <- list(
     "Glutamatergic" = glutamatergic_labels,
     "Non.Neuronal"  = nonneuronal_labels
     )
+
 ```
 
 
@@ -349,6 +350,7 @@ for (m in class_models_to_train) {
   logger.info("Info: Ended training %s subclass levels%s", m, tic.log()[[1]])
   tic.clearlog()
 }
+
 ```
 
 
@@ -383,11 +385,11 @@ sst_labels       <- labels[which(predicted_classes == "Sst"),]
 serpinf1_data    <- data[which(predicted_classes   == "Serpinf1"),]
 serpinf1_labels  <- labels[which(predicted_classes == "Serpinf1"),]
 
-meis2_data      <- data[which(predicted_classes    == "Meis2"),]
-meis2_labels    <- labels[which(predicted_classes  == "Meis2"),]
+meis2_data       <- data[which(predicted_classes   == "Meis2"),]
+meis2_labels     <- labels[which(predicted_classes == "Meis2"),]
 
-vip_data        <- data[which(predicted_classes    == "Vip"),]
-vip_labels      <- labels[which(predicted_classes  == "Vip"),]
+vip_data         <- data[which(predicted_classes   == "Vip"),]
+vip_labels       <- labels[which(predicted_classes == "Vip"),]
 
 
 gabaergic_subclass_list <- c(
@@ -490,17 +492,17 @@ l5it_labels  <- labels[which(predicted_classes == "L5.IT"),]
 l5pt_data    <- data[which(predicted_classes   == "L5.PT"),]
 l5pt_labels  <- labels[which(predicted_classes == "L5.PT"),]
 
-l6ct_data    <- data[which(predicted_classes    == "L6.CT"),]
-l6ct_labels  <- labels[which(predicted_classes  == "L6.CT"),]
+l6ct_data    <- data[which(predicted_classes   == "L6.CT"),]
+l6ct_labels  <- labels[which(predicted_classes == "L6.CT"),]
 
-l6it_data    <- data[which(predicted_classes    == "L6.IT"),]
-l6it_labels  <- labels[which(predicted_classes  == "L6.IT"),]
+l6it_data    <- data[which(predicted_classes   == "L6.IT"),]
+l6it_labels  <- labels[which(predicted_classes == "L6.IT"),]
 
-l6b_data     <- data[which(predicted_classes    == "L6b"),]
-l6b_labels   <- labels[which(predicted_classes  == "L6b"),]
+l6b_data     <- data[which(predicted_classes   == "L6b"),]
+l6b_labels   <- labels[which(predicted_classes == "L6b"),]
 
-np_data      <- data[which(predicted_classes    == "NP"),]
-np_labels    <- labels[which(predicted_classes  == "NP"),]
+np_data      <- data[which(predicted_classes   == "NP"),]
+np_labels    <- labels[which(predicted_classes == "NP"),]
 
 glutamatergic_subclass_list <- c(
   #"CR",      # Only one class

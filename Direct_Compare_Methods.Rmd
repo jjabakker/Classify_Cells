@@ -1,5 +1,5 @@
 ---
-title: "Debug SVM"
+title: "Direct model compare"
 output:
   html_document: default
   pdf_document: default
@@ -11,8 +11,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r}
-rm(list = ls())
-set.seed(1234)
+
+rm(list = ls())    # Remove all variables
+cat("\014")        # Clear the console
+set.seed(1234)     # For random repeatability
+
 ```
 
 
@@ -20,34 +23,20 @@ set.seed(1234)
 
 Dataset options are:
 
-"Baron_Mouse",  1,886 cells, 14,861 genes
-"Baron_Human",  8,569 cells, 17,499 genes
-"Muraro",       2,122 cells, 18,915 genes  
-"SegerStolpe",  2,133 cells, 22,757 genes
-"Xin",          1,419 cells, 33,889 genes
-"Zhou"
-"Bo"
-"Petropoulos1"
-"Petropoulos2"
+Baron_Mouse  # 1,886 cells, 14,861 genes
+Baron_Human  # 8,569 cells, 17,499 genes
+Muraro       # 2,122 cells, 18,915 genes
+SegerStolpe  # 2,133 cells, 22,757 genes
+Xin          # 1,449 cells, 33,889 genes
+Zhou         # 2,554 cells, 19,046 genes
+Bo           # 516   cells, 56,924 genes
+Petropoulos1 # 1,529 cells, 26,178 genes 
 
 ```{r}
 
-# Select dataset and model
+# Select dataset
 
-dataset_name     <- "Bo"
-
-# Select preprocessing
-
-preproc_method   <- "pp_no_pca"
-preproc_method   <- "pp_log_pca"
-preproc_method   <- "pp_pca"
-
-# Specify which models should be run
-# Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
-
-TRAIN_SVML      <- TRUE
-TRAIN_GBM       <- TRUE
-TRAIN_GLMNET    <- TRUE
+dataset_name     <- "Xin"
 
 ```
 
@@ -67,10 +56,12 @@ library(caret)
 library(data.table)
 library(matrixStats)
 library(tictoc)
-library(MazamaCoreUtils)        # Used for logging messages to a file
+library(MazamaCoreUtils)
 
 source("Code/Train/read_dataset.R")
+source("Code/Train/process_config.R")
 source("Code/Predict/predict_model_with_labels.r")
+source("Code/utilities.R")
 
 ```
 
@@ -83,16 +74,11 @@ PCA_Threshold   <- 0.90         # The percentage variance explained by the PCA
 features_limit  <- 1000         # The number of features that will be considered duringthe PCA
                                 # A high number use sthe richness of the data set optimally, but makes processing slo
 
-VERBOSE         <- TRUE         # If TRUE generates analysis data
-SEURAT_VERBOSE  <- TRUE
-VARIABLE_GENES  <- TRUE
-LOGGER          <- FALSE
-
 # Summary results will be kept here 
 report_out      <- data.frame()
-
-# Information of all the runs will be gathered in the class_summaries list  
 class_summaries <- list()
+medianF1_table  <- data.frame()
+duration_table  <- data.frame()
 
 # Paths
 proj_path       <- file.path(".")
@@ -102,28 +88,16 @@ rdata_path      <- file.path(proj_path, "rData")
 config_path     <- file.path(proj_path, "config")
 
 # Logging and timer
-logger.setup (infoLog = file.path(log_path, paste0(dataset_name, "_model_compare.log")))
+logger.setup (infoLog = file.path(log_path, "dump.log"))
+tic.clear()
+tic.clearlog()
 
 ```
 
 
-```{r, preprocess options}
+# Get the data
 
-if (preproc_method == "pp_pca")  {
-  log_preprocess   <- FALSE
-  caret_preprocess_method <- c('scale', 'center', 'pca')
-} else if (preproc_method == "pp_no_pca")  {
-  log_preprocess   <- FALSE
-  caret_preprocess_method <- c('scale', 'center')
-} else if (preproc_method == "pp_log_pca")  {
-  log_preprocess   <- TRUE
-  caret_preprocess_method <- c('scale', 'center', 'pca')
-}
-
-```
-
-
-# Read in the data
+## Read data file
 
 ```{r, Read}
 
@@ -131,51 +105,37 @@ ret    <- read_dataset(data_path, dataset_name)
 data   <- ret$data
 labels <- ret$labels
 
-if (log_preprocess) {
-  data <- log(1 + data)
-}
+```
 
-# Remove small classes
-min_class_size      <- 10
-removed_classes     <- !(table(labels$ident) > min_class_size)
-cells_to_keep       <- !(is.element(labels[,1], names(removed_classes)[removed_classes]))
-ori                 <- dim(data)[1] 
-data                <- data[cells_to_keep,]
-labels              <- labels[cells_to_keep,]
-labels$ident        <- factor(labels$ident)
-rm(removed_classes, cells_to_keep)
 
-# Show composition
-cat(sprintf("Information on dataset after removing small classes"))
-cat(sprintf("Removed %d cells from small classes\n\n", ori - dim(data)[1] )) 
+## Read config file and adjust data
 
-cat(sprintf("There are %d cells and %d features.\n", dim(data)[1], dim(data)[2]))
-for (i in 1:length(table(labels$ident))) {
-  cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i]))
-}
-cat(sprintf("\n"))
+```{r, Config}    
 
-# Remove genes that are 0 for all cells
-genes_to_keep <- (colSums(data) != 0)
-cat(sprintf("\n"))
-ori           <- dim(data)[2]
-data          <- data[, genes_to_keep]
+ret                 <- read_config(config_path  = config_path,
+                                   dataset_name = dataset_name)
+config_data         <- ret$config_data
+   
+min_class_size      <- config_data["min_class_size", "Value"]
+cluster_resolution  <- config_data["cluster_resolution", "Value"] 
+minCount            <- config_data["minCount", "Value"] 
+maxCount            <- config_data["maxCount", "Value"]
+minFeature          <- config_data["minFeature", "Value"] 
+maxFeature          <- config_data["maxFeature", "Value"] 
 
-# Show composition
-cat(sprintf("Information on processed dataset %s\n", dataset_name))
-cat(sprintf("Removed %d all-zero genes\n\n",ori - dim(data)[2])) 
-cat(sprintf("There are %d cells and %d features.\n\n", dim(data)[1], dim(data)[2]))
-for (i in 1:length(table(labels$ident))) {
-  cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i]))
-}
+ret                 <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
+data                <- ret$data
+labels              <- ret$labels
+
+saved_data          <- data
+saved_labels        <- labels
 
 ```
 
 
-# Find the Variable Genes 
+# Find the Variable Genes (Seurat)
 
 ```{r, variable_features, fig.height=5, message = FALSE, echo=FALSE}
-
 
 seurat_object <- CreateSeuratObject(counts    = t(data),
                                     meta.data = as.data.frame(labels),
@@ -191,7 +151,7 @@ seurat_object <- FindVariableFeatures(object           = seurat_object,
                                       nfeatures        = dim(data)[2])
 
 # Identify the most highly variable genes
-top_genes      <- VariableFeatures(seurat_object)
+top_genes     <- VariableFeatures(seurat_object)
 
 # Show composition
 cat(sprintf("Information on dataset after variable gene determination of dataset %s\n", dataset_name))
@@ -203,68 +163,59 @@ for (i in 1:length(table(labels$ident))) {
   cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i]))
 }
 cat(sprintf("\n"))
-
-if (SEURAT_VERBOSE) {
   
-  # plot variable features with and without labels
-  p1 <- VariableFeaturePlot(seurat_object)
-  p2 <- LabelPoints(plot   = p1, 
-                    points = top_genes[1:15], 
-                    repel  = TRUE)
-  grid.arrange(p1, p2, nrow = 1)
-  rm(p1, p2)
-  
-  cluster_resolution = 0.5
-  
-  #-------------------------------------
-  source("Code/Train/seurat_analysis.R")
-  seurat_object <- run_seurat_analysis(seurat_object)
-  #-------------------------------------
-  
-  FeatureScatter(seurat_object, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") + NoLegend()
-  VlnPlot(seurat_object, features = c("nFeature_RNA", "nCount_RNA"), ncol = 2)
-  DimPlot(seurat_object, reduction = 'pca')
-  DimPlot(seurat_object, reduction = 'tsne')
-  DimPlot(seurat_object, reduction = 'umap', label = TRUE) + NoLegend()
-  VizDimLoadings(seurat_object, dims = 1:4, reduction = 'pca')
-  DimHeatmap(seurat_object, dims = 1:15, cells = 500, balanced = TRUE)
-  ElbowPlot(seurat_object)
-  
-}
+# plot variable features with and without labels
+p1 <- VariableFeaturePlot(seurat_object)
+p2 <- LabelPoints(plot   = p1, 
+                  points = top_genes[1:15], 
+                  repel  = TRUE)
+grid.arrange(p1, p2, nrow = 1)
+rm(p1, p2)
 
 ```
 
 
-# Caret processing
-Here starts the actual training and prediction processing 
 
+# Define the routine that does the work
 
 ```{r}
 
-save_data   <- data
-save_labels <- labels
+# Global parameters still used:
 
-```
-
-
-
-### svm Linear test
-
-
-```{r, svm_Linear, fig.width = 5}
+# top_genes
+# features_limit
   
-if (TRAIN_SVML) {
-    
-  data   <- save_data
-  labels <- save_labels
+train_and_test <- function (dataset_name, data, labels, method, preproc_method) {
+  
+  tic(msg = "", quiet = TRUE)
+  
+  # Set preprocess options
+  if (preproc_method == "pca")  {
+    log_preprocess   <- FALSE
+    caret_preprocess_method <- c('scale', 'center', 'pca')
+  } else if (preproc_method == "nopca")  {
+    log_preprocess   <- FALSE
+    caret_preprocess_method <- c('scale', 'center')
+  } else if (preproc_method == "logpca")  {
+    log_preprocess   <- TRUE
+    caret_preprocess_method <- c('scale', 'center', 'pca')
+  }
+  if (log_preprocess) {
+    data <- log(1 + data)
+  }
 
   # Limit the data set to the number of genes required 
-  ldata  <- as.data.frame(data[ , top_genes[1:features_limit]])
+  ldata = as.data.frame(data[ , top_genes[1:features_limit]])
   
   # Add labels to ldata
   ldata              <- cbind.data.frame(labels, ldata)
   ldata              <- ldata %>% select(-one_of("cell_id"))
 
+  # Limit the data set to the number of genes specified in 'features_limit' (1000 has been found to be a good choice)
+  ldata = as.data.frame(data[ , top_genes[1:features_limit]])
+  ldata              <- cbind.data.frame(labels, ldata)
+  ldata              <- ldata %>% select(-one_of("cell_id"))
+  
   # Create partions
   trainRowNumbers    <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
   train_data         <- ldata[trainRowNumbers,]
@@ -274,213 +225,321 @@ if (TRAIN_SVML) {
                                    method  = caret_preprocess_method,
                                    thresh  = PCA_Threshold,
                                    verbose = TRUE)
-  
   pp_train_data      <- predict(preproc_model, train_data)
- 
+  
   # Train
-  model_svmLinear    <- train(ident ~ ., 
+  if (method == "glmnet") {
+    model            <- train(ident ~ ., 
                               data      = pp_train_data, 
-                              method    = "svmLinear",
+                              method    = method,
+                              tuneGrid  = expand.grid(alpha  = 0:1, lambda = 0.10 / 10),
                               trControl = trainControl("cv", 
                                                        number = 5, 
-                                                       classProbs = TRUE,
+                                                       classProbs  = TRUE,
                                                        verboseIter = TRUE))
-
+  } else {
+    model            <- train(ident ~ ., 
+                               data      = pp_train_data, 
+                               method    = method,
+                               trControl = trainControl("cv", 
+                                                        number = 5, 
+                                                        classProbs  = TRUE,
+                                                        verboseIter = TRUE)) 
+  }
   
   ###########################################################################
   # Predict and Evaluate
   ###########################################################################
 
-  ret         <- predict_model_with_labels(method       = "svmLinear",
-                                           model        = model_svmLinear, 
-                                           model_name   = dataset_name,
-                                           dataset_name = dataset_name,
-                                           data         = test_data, 
-                                           labels       = test_data[,1:2], 
-                                           report_out   = report_out)
+  ret               <- predict_model_with_labels(method         = method,
+                                                 model          = model,
+                                                 preproc_method = preproc_method,
+                                                 preproc_model  = preproc_model,
+                                                 model_name     = dataset_name,
+                                                 dataset_name   = dataset_name,
+                                                 data           = test_data, 
+                                                 labels         = test_data[,1:2], 
+                                                 report_out     = report_out)
   report_out        <- ret$report_out
   predicted_classes <- ret$predicted_classes
   class_summary     <- ret$class_summary
-  
-  # cat(sprintf("\nPercentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
-  #             min_prob_value,
-  #             correct_predicted_percentage,
-  #             correct_assigned_percentage,
-  #             unassigned_percentage))
-  
-  cm <- confusionMatrix(test_data[,1],
-                        predicted_classes,
-                        mode = "everything",
-                        dnn = c("Reference", "Predicted"))
+  duration          <- ret$duration
+
+  cm                <- confusionMatrix(test_data[,1],
+                                       predicted_classes,
+                                       mode = "everything",
+                                       dnn  = c("Reference", "Predicted"))
   print(cm)
   
-  svml_accuracy <- cm[["overall"]][["Accuracy"]]
-  svml_F1       <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  accuracy          <- cm[["overall"]][["Accuracy"]]
+  medianF1          <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
   
   print(class_summary)
-
+  cat(sprintf("\nThe medianF1 for dataset %s, preprocessing %s, method %s is: %3.2f\n", 
+              dataset_name, preproc_method,method, medianF1))
+  
+  # Now save the models for later use
+  save_model(path                = rdata_path, 
+             model_dataset_name  = dataset_name, 
+             learning_method     = method, 
+             preproc_method      = preproc_method,
+             model               = model,
+             preproc_model       = preproc_model)
+  
+  toc(log=TRUE, quiet = TRUE)
+  duration_str     <- tic.log()[[1]]
+  duration         <- as.numeric(str_split(duration_str, " ")[[1]][2])
+  tic.clearlog()
+  
+  return( list(medianF1 = medianF1,
+               duration = duration))
 }
 
 ```
 
+# Process the datasets
+
+## Preprocess - PCA
+
+### svmLinear
+
+```{r, fig.width = 5}
+
+meth <- "svmLinear"
+ppm  <- "pca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
+
+```
+
+### svmRadial
+
+```{r, fig.width = 5}
+
+meth <- "svmRadial"
+ppm  <- "pca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
+
+```
+
+
+### RF
+
+```{r, fig.width = 5}
+
+meth <- "rf"
+ppm  <- "pca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
+
+```
 
 
 ### GBM
 
+```{r, fig.width = 5}
 
-```{r, gbm, , fig.width = 5}
+meth <- "gbm"
+ppm  <- "pca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
 
-model_gbm    <- NULL
-gbm_accuracy <- 0
-  
-if (TRAIN_GBM) {
-  
-  data   <- save_data
-  labels <- save_labels
-  
-  # Limit the data set to the number of genes specified in 'features_limit' (1000 has been found to be a good choice)
-  ldata = as.data.frame(data[ , top_genes[1:features_limit]])
-  
-  ldata              <- cbind.data.frame(labels, ldata)
-  ldata              <- ldata %>% select(-one_of("cell_id"))
-  trainRowNumbers    <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
-  
-  train_data         <- ldata[trainRowNumbers,]
-  test_data          <- ldata[-trainRowNumbers,]
+```
 
-  preproc_model      <- preProcess(train_data, 
-                                   method  = caret_preprocess_method,
-                                   thresh  = PCA_Threshold,
-                                   verbose = TRUE)
-  
-  pp_train_data      <- predict(preproc_model, train_data)
+## Preprocess - no PCA
 
-  model_gbm          <- train(ident ~ ., 
-                              data      = pp_train_data, 
-                              method    = "gbm",
-                              trControl = trainControl("cv", 
-                                                        number = 5, 
-                                                        classProbs = TRUE,
-                                                        verboseIter = TRUE)) 
-  
-  ###########################################################################
-  # Predict and Evaluate
-  ###########################################################################
-  
-  ret         <- predict_model_with_labels(method       = "gbm",
-                                           model        = model_gbm, 
-                                           model_name   = dataset_name,
-                                           dataset_name = dataset_name,
-                                           data         = test_data, 
-                                           labels       = test_data[,1:2], 
-                                           report_out   = report_out)
-  report_out        <- ret$report_out
-  predicted_classes <- ret$predicted_classes
-  class_summary     <- ret$class_summary
- 
-  # cat(sprintf("Percentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
-  #             min_prob_value,
-  #             correct_predicted_percentage,
-  #             correct_assigned_percentage,
-  #             unassigned_percentage))
-  
-  cm <- confusionMatrix(test_data[,1],
-                        predicted_classes,
-                        mode = "everything",
-                        dnn = c("Reference", "Predicted"))
-  print(cm)
-  gbm_accuracy <- cm[["overall"]][["Accuracy"]]
-  gbm_F1       <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
-  
-  print(class_summary)
-  
-}
+### svmLinear
+
+```{r, fig.width = 5}
+
+meth <- "svmLinear"
+ppm  <- "nopca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
+
+```
+
+### svmRadial
+
+```{r, fig.width = 5}
+
+meth <- "svmRadial"
+ppm  <- "nopca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
+
+```
+
+### RF
+
+```{r, fig.width = 5}
+
+meth <- "rf"
+ppm  <- "nopca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
+
+```
+
+### GBM
+
+```{r, fig.width = 5}
+
+meth <- "gbm"
+ppm  <- "nopca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
+
+```
+
+## Preprocess - Log PCA
+
+### svmLinear
+
+```{r, fig.width = 5}
+
+meth <- "svmLinear"
+ppm  <- "logpca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
+
+```
+
+### svmRadial
+
+```{r, fig.width = 5}
+
+meth <- "svmRadial"
+ppm  <- "logpca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
+
+```
+
+### RF
+
+```{r, fig.width = 5}
+
+meth <- "rf"
+ppm  <- "logpca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
+
+```
+
+### GBM
+
+```{r, fig.width = 5}
+
+meth <- "gbm"
+ppm  <- "logpca"
+ret  <- train_and_test (dataset_name   = dataset_name,
+                        data           = saved_data,
+                        labels         = saved_labels, 
+                        method         = meth, 
+                        preproc_method = ppm)
+medianF1_table[meth, ppm] -> ret$medianF1
+duration_table[meth, ppm] -> ret$duration
+medianF1_table
 
 ```
 
 
-### glmnet
+# Report results
 
-```{r, glmnet , fig.width = 5}
-
-if (TRAIN_GLMNET) {
-  
-  data   <- save_data
-  labels <- save_labels
-  method <- "glmnet"
-
-  # Limit the data set to the number of genes required 
-  ldata = as.data.frame(data[ , top_genes[1:features_limit]])
-  
-  # Add labels to ldata
-  ldata              <- cbind.data.frame(labels, ldata)
-  ldata              <- ldata %>% select(-one_of("cell_id"))
-
-  # Limit the data set to the number of genes specified in 'features_limit' (1000 has been found to be a good choice)
-  ldata = as.data.frame(data[ , top_genes[1:features_limit]])
-  ldata              <- cbind.data.frame(labels, ldata)
-  ldata              <- ldata %>% select(-one_of("cell_id"))
-  
-  # Create partions
-  trainRowNumbers    <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
-  train_data         <- ldata[trainRowNumbers,]
-  test_data          <- ldata[-trainRowNumbers,]
-
-  preproc_model      <- preProcess(train_data, 
-                                   method  = caret_preprocess_method,
-                                   thresh  = PCA_Threshold,
-                                   verbose = TRUE)
-  
-  pp_train_data      <- predict(preproc_model, train_data)
-  
-  # Train
-  model_glmnet       <- train(ident ~ ., 
-                              data      = pp_train_data, 
-                              method    = "glmnet",
-                              tuneGrid  = expand.grid(alpha  = 0:1, lambda = 0.10 / 10),
-                              trControl = trainControl("cv", 
-                                                       number = 5, 
-                                                       classProbs = TRUE,
-                                                       verboseIter = TRUE))
-
-  ###########################################################################
-  # Predict and Evaluate
-  ###########################################################################
-
-  ret         <- predict_model_with_labels(method       = "glmnet",
-                                           model        = model_glmnet, 
-                                           model_name   = dataset_name,
-                                           dataset_name = dataset_name,
-                                           data         = test_data, 
-                                           labels       = test_data[,1:2], 
-                                           report_out   = report_out)
-  report_out        <- ret$report_out
-  predicted_classes <- ret$predicted_classes
-  class_summary     <- ret$class_summary
-  
-  # cat(sprintf("\nPercentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
-  #             min_prob_value,
-  #             correct_predicted_percentage,
-  #             correct_assigned_percentage,
-  #             unassigned_percentage))
-  
-  cm <- confusionMatrix(test_data[,1],
-                        predicted_classes,
-                        mode = "everything",
-                        dnn = c("Reference", "Predicted"))
-  print(cm)
-  
-  glm_accuracy <- cm[["overall"]][["Accuracy"]]
-  glm_F1       <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
-  
-  print(class_summary)
-}
-  
+```{r}
+medianF1_table
 ```
 
 
+```{r}
+duration_table
+```
 
+```{r}
+report_out <- data.frame()
 
+for (i in 1 : dim(medianF1_table)[1]) {
+  for (j in 1 : dim(medianF1_table)[2]) {
+    report_row = data.frame(Method    = rownames(medianF1_table)[i],
+                            ModelName = dataset_name,
+                            PreProc   = colnames(medianF1_table)[j],
+                            MedianF1  = medianF1_table[i, j],
+                            duration  = duration_table[i, j])
+    report_out <- rbind(report_out, report_row)
+  }
+}
 
+save_report_data (report_out         = report_out,
+                  path               = rdata_path,
+                  model_dataset_name = dataset_name)
 
+```
 
