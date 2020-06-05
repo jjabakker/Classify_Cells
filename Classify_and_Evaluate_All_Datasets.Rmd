@@ -169,7 +169,7 @@ for (row in 1:nrow(to_review)) {
   model_name      <- to_review[row, "ModelData"]
   dataset_name    <- to_review[row, "TestData"]
   
-  ret             <- read_model_and_data(rdata_path, model_name, dataset_name, preproc_method)
+  ret             <- read_singlemodel_and_data(rdata_path, model_name, dataset_name, preproc_method)
   
   preproc_model   <- ret$model[["preproc_model"]]
   model_svmRadial <- ret$model[["model_svmRadial"]]

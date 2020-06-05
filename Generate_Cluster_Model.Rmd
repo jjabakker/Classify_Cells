@@ -31,20 +31,15 @@ Petropoulos1 # 1,529 cells, 26,178 genes
 ```{r}
 
 # Specify  which model to analyse
-dataset_name   <- "Muraro"
+dataset_name   <- "Petropoulos1"
 
 # Select preprocessing
 
 preproc_method <- "pca"
 
-# Specify which models should be run
-# Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
+# Specify which model to run
 
-TRAIN_SVML     <- FALSE
-TRAIN_SVMR     <- FALSE
-TRAIN_RF       <- FALSE
-TRAIN_GBM      <- TRUE
-TRAIN_GLMNET   <- FALSE
+method        <- "gbm"
 
 ```
 
@@ -260,6 +255,7 @@ sprintf("Check cluster resolution. Current value is %2.1f\n", cluster_resolution
 
 ret                  <- find_best_resolution(seurat_object)   
 best_resolution      <- ret$best_resolution
+coherence_table      <- ret$coherence_table
 seurat_object        <- FindClusters(seurat_object, 
                                      resolution = best_resolution)
 head(x = Idents(seurat_object), 8)
@@ -272,6 +268,8 @@ colnames(cluster)[1] <- "Cluster"
 plot_data            <- cbind(xy, class, cluster)
 
 ret                  <- calc_coherence(seurat_object)
+cluster_table        <- ret$cluster_table
+weighted_coherence   <- ret$weighted_coherence
 
 p1 <- ggplot(plot_data, aes(x = UMAP_1, y = UMAP_2, col = Cluster)) +
   geom_point(size = 0.3) +
@@ -292,7 +290,8 @@ p2 <- ggplot(plot_data, aes(x = UMAP_1, y = UMAP_2, col = Class)) +
 title_string <- sprintf("Seurat-generated cluster for dataset %s with a weighted coherence of %3.1f%%", dataset_name, ret$weighted_coherence * 100)
 grid.arrange(p1, p2, nrow = 1, top = title_string)
 
-print(ret$cluster_table)
+print(coherence_table)
+print(cluster_table)
 
 ```
 
@@ -358,26 +357,6 @@ test_data        <- ldata[-trainRowNumbers,]
 ```
 
 
-## Save the data and labels 
-
-```{r, save_data}
-
-# The data, labels and trainRowNumbers are saved. The variable trainRowNumbers is needed to create a test set
-
-if (FALSE) {
-  data_information = list(
-    data            = saved_data,
-    labels          = saved_labels,
-    trainRowNumbers = trainRowNumbers,
-    dataset_name    = dataset_name
-    )
-  
-  save(data_information,
-       file = file.path(rdata_path, paste0(dataset_name, "_data_and_labels.rData")))
-}
-
-```
-
 
 ## Eliminate the genes for which there is no variance
 
@@ -401,7 +380,6 @@ if (dim(train_data)[2] != ngenes) {
 ## Preprocess
 
 ```{r, prepocess}
-
 
 preproc_model <- preProcess(train_data, 
                             method  = caret_preprocess_method,
@@ -434,17 +412,15 @@ model_svmLinear <- NULL
 svml_accuracy   <- 0
 svml_medianF1   <- 0
   
-if (TRAIN_SVML) {
-  logger.info("Info: Started training svmLinear with dataset %s", dataset_name)
-  tic(msg = "", quiet = TRUE)
+if (method == "svmLinear") {
   
-  model_svmLinear <- train(ident ~ ., 
-                           data      = pp_train_data, 
-                           method    = "svmLinear",
-                           trControl = trainControl("cv", 
-                                                    number = 5, 
-                                                    classProbs = TRUE,
-                                                    verboseIter = TRUE))
+  model <- train(ident ~ ., 
+                 data      = pp_train_data, 
+                 method    = method,
+                 trControl = trainControl("cv", 
+                                          number = 5, 
+                                          classProbs = TRUE,
+                                          verboseIter = TRUE))
   
   print(model_svmLinear)
   print(model_svmLinear$finalModel)
@@ -460,9 +436,19 @@ if (TRAIN_SVML) {
   svml_accuracy <- cm[["overall"]][["Accuracy"]]
   svml_medianF1 <- median(cm[["byClass"]][,"F1"], na.rm = TRUE) 
   
-  toc(log=TRUE, quiet = TRUE)
-  logger.info("Info: Finished training svmLinear with dataset %s%s", dataset_name, tic.log()[[1]])
-  tic.clearlog()
+  # Now save the models for later use
+  save_cluster_model(path                = rdata_path, 
+                     model_dataset_name  = dataset_name, 
+                     learning_method     = method, 
+                     preproc_method      = preproc_method,
+                     model               = model,
+                     preproc_model       = preproc_model,
+                     top_genes           = top_genes,
+                     features_limit      = length(top_genes),
+                     marker_list         = marker_list,
+                     cluster_table       = cluster_table,
+                     weighted_coherence  = weighted_coherence,
+                     trainRowNumbers     = trainRowNumbers)
 }
 
 ```
@@ -477,131 +463,47 @@ model_gbm    <- NULL
 gbm_accuracy <- 0
 gbm_medianF1 <- 0
 
-if (TRAIN_GBM) {
-  logger.info("Info: Started training gbm with dataset %s", dataset_name)
-  tic(msg = "", quiet = TRUE)
-  
-  model_gbm    <- train(ident ~ ., 
+if (method == "gbm") {
+   
+  model        <- train(ident ~ ., 
                         data      = pp_train_data, 
-                        method    = "gbm",
+                        method    = method,
                         trControl = trainControl("cv", 
                                                  number = 5, 
                                                  classProbs = TRUE,
                                                  verboseIter = TRUE))
 
-  print(model_gbm)
-  print(model_gbm$finalModel)
+  print(model)
+  print(model$finalModel)
   
-  # This plot does not work for gbm
-  # plot(varImp(model_gbm), main="Variable Importance")
-  
-  predicted_classes <- predict(model_gbm, pp_test_data[,-1])
+  predicted_classes <- predict(model, pp_test_data[,-1])
   cm                <- confusionMatrix(pp_test_data[,1],
                                        predicted_classes,
                                        mode = "everything",
-                                       dnn=c("Reference", "Predicted"))
+                                       dnn  =c("Reference", "Predicted"))
   cm
   gbm_accuracy      <- cm[["overall"]][["Accuracy"]]
   gbm_medianF1      <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)    
   
-  toc(log=TRUE, quiet = TRUE)
-  logger.info("Info: Finished training gbm with dataset %s. %s", dataset_name, tic.log()[[1]])
-  tic.clearlog()
-}
-
-```
-
-
-
-
-
-# Save the models, data and the configuration file
-
-```{r, save_models }
-
-if (SAVE) {
-  save_csv <- config_data["minCount", "Value"]           != minCount ||
-              config_data["maxCount", "Value"]           != maxCount ||
-              config_data["minFeature", "Value"]         != minFeature ||
-              config_data["maxFeature", "Value"]         != maxFeature ||
-              config_data["min_class_size", "Value"]     != min_class_size ||
-              config_data["cluster_resolution", "Value"] != cluster_resolution 
-
-  if (save_csv) {
-    config_data["min_class_size", "Value"]     <- min_class_size
-    config_data["cluster_resolution", "Value"] <- cluster_resolution
-    config_data["minCount", "Value"]           <- minCount
-    config_data["maxCount", "Value"]           <- maxCount
-    config_data["minFeature", "Value"]         <- minFeature
-    config_data["maxFeature", "Value"]         <- maxFeature
-    write.csv(config_data,
-              file.path(config_path, paste0(dataset_name, "_config.csv")),
-              row.names = TRUE)
-  }
   
-  model_information = list(
-    seurat_object      = seurat_object,
-    top_genes          = top_genes,
-    config_data        = config_data,
-    preproc_model      = preproc_model,
-    model_rf           = model_rf,
-    model_gbm          = model_gbm,
-    model_svmRadial    = model_svmRadial,
-    model_svmLinear    = model_svmLinear,
-    model_glmnet       = model_glmnet,
-    dataset_name       = dataset_name,
-    PCA_Threshold      = PCA_Threshold,
-    features_limit     = features_limit,
-    cluster_resolution = cluster_resolution
-    )
-    
   # Now save the models for later use
-
-  save(model_information, 
-       file = file.path(rdata_path, "ClusteredModels", paste0(dataset_name, "_c_models_", preproc_method, ".rData")))
+  save_cluster_model(path                = rdata_path, 
+                     model_dataset_name  = dataset_name, 
+                     learning_method     = method, 
+                     preproc_method      = preproc_method,
+                     model               = model,
+                     preproc_model       = preproc_model,
+                     top_genes           = top_genes,
+                     features_limit      = length(top_genes),
+                     marker_list         = marker_list,
+                     cluster_table       = cluster_table,
+                     weighted_coherence  = ret$weighted_coherence,
+                     trainRowNumbers     = trainRowNumbers)
 }
 
 ```
 
 
-```{r}
-
-logger.info("")
-logger.info("Summary: Model created with dataset %s", dataset_name)
-logger.info("")
-
-logger.info("   Config Parameters")  
-logger.info("      min_class_size     : %d",    min_class_size)
-logger.info("      cluster_resolution : %2.1f", cluster_resolution)
-logger.info("      minCount           : %d",    minCount)
-logger.info("      maxCount           : %d",    maxCount)
-logger.info("      minFeature         : %d",    minFeature)
-logger.info("      maxFeature         : %d",    maxFeature)
-logger.info("")
-
-logger.info("   Preprocess")  
-logger.info("      Method             : %s", preproc_method)
-logger.info("")
-
-logger.info("   Train Parameters")  
-logger.info("      PCA Threshold      : %2.1f", PCA_Threshold)
-logger.info("      Features used      : %d",    features_limit)
-logger.info("      PCA dimensions     : %d",    dim(pp_train_data)[2])
-logger.info("")
-
-logger.info("   Accuracy")
-logger.info("      Accuracy of Random Forest is     : %3.1f%%", rf_accuracy * 100)
-logger.info("      Accuracy of GBM is               : %3.1f%%", gbm_accuracy * 100)
-logger.info("      Accuracy of SVM Radial is        : %3.1f%%", svmr_accuracy * 100)
-logger.info("      Accuracy of SVM Linear is        : %3.1f%%", svml_accuracy * 100)
-logger.info("      Accuracy of GLMNET is            : %3.1f%%", glmnet_accuracy * 100)
-logger.info("")
-logger.info("      Median F1 of Random Forest is    : %3.1f%%", rf_medianF1 * 100)
-logger.info("      Median F1 of GBM is              : %3.1f%%", gbm_medianF1 * 100)
-logger.info("      Median F1 of SVM Radial is       : %3.1f%%", svmr_medianF1 * 100)
-logger.info("      Median F1 of SVM Linear is       : %3.1f%%", svml_medianF1 * 100)
-logger.info("      Median F1 of GLMNET is           : %3.1f%%", glmnet_medianF1 * 100)
-```
 
 
 

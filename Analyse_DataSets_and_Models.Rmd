@@ -11,15 +11,20 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r}
+
+rm(list = ls())
+
 library(tidyverse)
+source("./Code/utilities.R")
+
 ```
 
 
 ```{r, initialise}
 
-rm(list = ls())
 
-READ_FRESH = FALSE
+
+READ_FRESH = TRUE
 
 proj_path   <- file.path(".")
 data_path   <- file.path(proj_path, "DataSets")
@@ -58,16 +63,17 @@ if (READ_FRESH) {
     dataset_name <- data_sets[[ii]][1]
     cat(sprintf("%s\n", dataset_name))
     
-    load(file = file.path(rdata_path, paste0(dataset_name, "_data_and_labels.rData")))
-    data   <- data_information[["data"]]
-    labels <-data_information[["labels"]]
+    ret <- load_single_data(rdata_path, dataset_name)
+    data   <- ret$data
+    labels <- ret$labels
 
     gene_names[ii]  <- list(sort(colnames(data)))
     class_names[ii] <- list(sort(str_to_lower(unique(labels[,1]))))
     class_freq[ii]  <- list(table(labels$ident))
     
-    load(file = file.path(rdata_path, paste0(dataset_name, "_models.rData")))
-    top_genes[ii]      <- list(model_information[["top_genes"]])
+    # To read in the top_genes, you can use any of the models for that dataset, svnLinear and pca is a good combination, but any will do
+    ret <- load_single_model(rdata_path, dataset_name, "svmLinear", "pca")
+    top_genes[ii]      <- list(ret$model_information[["top_genes"]])
   }
   
   names(class_names) <- data_sets
@@ -169,14 +175,30 @@ nr_total_genes
 
 # Do the top genes appear in all data sets?
 
-```{r, intersect top genes}
+```{r, intersect top genes - pancreatic}
 
 size_of_top_genes <- 1000
 
 cat(sprintf("How many of the %d top genes occur in other datasets? \n\n", size_of_top_genes))
 
-for (i in 1:(length(data_sets))) { 
-  for (j in (1):length(data_sets)) {
+for (i in 1:5) { 
+  for (j in 1:5) {
+    overlap <- length(intersect(top_genes[[i]][1:size_of_top_genes],
+                                gene_names[[j]]))
+    cat(sprintf("Of the top %d genes of %-12s %4d occur in the full %-12s dataset\n", size_of_top_genes, data_sets[i], overlap, data_sets[j]))
+  }
+  cat(sprintf("\n"))
+}
+
+```
+```{r, intersect top genes - embryonic}
+
+size_of_top_genes <- 1000
+
+cat(sprintf("How many of the %d top genes occur in other datasets? \n\n", size_of_top_genes))
+
+for (i in 6:8) { 
+  for (j in 6:8) {
     overlap <- length(intersect(top_genes[[i]][1:size_of_top_genes],
                                 gene_names[[j]]))
     cat(sprintf("Of the top %d genes of %-12s %4d occur in the full %-12s dataset\n", size_of_top_genes, data_sets[i], overlap, data_sets[j]))
@@ -187,24 +209,27 @@ for (i in 1:(length(data_sets))) {
 ```
 
 
+
 # Are the top_genes very different in the various datasets?
 
 ```{r, topgenes in datasets}
-size_of_top_genes <- 1000
+# size_of_top_genes <- 1000
+# 
+# cat(sprintf("Analysis of occurance of the top %d genes used in the model in the various data sets.\n\n", size_of_top_genes))
+# 
+# for (i in 1:length(data_sets)) {
+#   for (j in 1:length(data_sets)) {
+#     overlap <- length(intersect(top_genes[[i]][1:size_of_top_genes],
+#                                 top_genes[[j]][1:size_of_top_genes]))
+#     cat(sprintf("The overlap of the %d top genes in model %-12s with the top genes in dataset %-12s is %d\n", 
+#                 size_of_top_genes, data_sets[i], data_sets[j], overlap))
+#   }
+#   cat("\n")
+# }
+```
 
-cat(sprintf("Analysis of occurance of the top %d genes used in the model in the various data sets.\n\n", size_of_top_genes))
 
-for (i in 1:length(data_sets)) {
-  for (j in 1:length(data_sets)) {
-    overlap <- length(intersect(top_genes[[i]][1:size_of_top_genes],
-                                top_genes[[j]][1:size_of_top_genes]))
-    cat(sprintf("The overlap of the %d top genes in model %-12s with the top genes in dataset %-12s is %d\n", 
-                size_of_top_genes, data_sets[i], data_sets[j], overlap))
-  }
-  cat("\n")
-}
-
-
+```{r, topgenes in datasets - pancreatic}
 cat(sprintf("Analysis of occurance of the top %d genes used in the model in the pancreas data sets.\n\n", size_of_top_genes))
 
 for (i in 1:5) { 
@@ -216,7 +241,10 @@ for (i in 1:5) {
   }
   cat("\n")
 }
+```
 
+
+```{r, topgenes in datasets - embryonic}
 cat(sprintf("Analysis of occurance of the top %d genes used in the model in the embryonic data sets.\n\n", size_of_top_genes))
 
 for (i in 6:8) { 

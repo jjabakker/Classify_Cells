@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, libraries, message=FALSE}
 
+rm(list = ls())
+
 library(readr)
 library(tibble)
 library(tidyr)
@@ -28,7 +30,7 @@ source("Code/utilities.R")
 
 ```{r, general initialise, message=FALSE}
 
-report          <- data.frame()
+report_table    <- data.frame()
 
 # Paths
 proj_path       <- file.path(".")
@@ -40,8 +42,189 @@ config_path     <- file.path(proj_path, "config")
 
 ```
 
+
 ```{r}
-list.file(file.path(rdata_path, "ReportData"))
-for 
+
+files_to_process <- list.files(file.path(rdata_path, "ReportData"))
+print(files_to_process)
+
+for (file in files_to_process)  {
+  print(file)
+  load (file.path(rdata_path, "ReportData", file))
+  report_table <- rbind(report_table, report_out)
+}
+
 ```
 
+## Generate the results table 
+
+
+## pca
+
+```{r}
+medianF1_pca_table    <- data.frame()
+duration_pca_table    <- data.frame()
+
+rt <- report_table %>% filter(PreProc == "pca")
+
+for (i in 1:dim(rt)[1]) {
+  row                          <- as.character(rt[i, "Method"])
+  col                          <- as.character(rt[i, "ModelName"])
+  medianF1                     <- round( rt[i, "MedianF1"],2)
+  medianF1_pca_table[row, col] <- medianF1
+  duration                     <- round( rt[i, "duration"],0)
+  duration_pca_table[row, col] <- duration
+}
+
+medianF1_pca_table["svmLinear", "Nr"] <- 1
+medianF1_pca_table["svmRadial", "Nr"] <- 2
+medianF1_pca_table["rf", "Nr"]        <- 3
+medianF1_pca_table["gbm", "Nr"]       <- 4
+
+medianF1_pca_table %>% 
+  rownames_to_column(var = "rowname") %>%
+  select("Xin", "Muraro", "Baron_Human", "Baron_Mouse", "SegerStolpe", "Zhou", "Bo", "Petropoulos1", "Nr", "rowname") %>%
+  arrange(Nr) %>%
+  column_to_rownames(var = "rowname") %>%
+  select(-Nr)
+```
+
+
+```{r}
+duration_pca_table["svmLinear", "Nr"] <- 1
+duration_pca_table["svmRadial", "Nr"] <- 2
+duration_pca_table["rf", "Nr"]        <- 3
+duration_pca_table["gbm", "Nr"]       <- 4
+
+duration_pca_table %>% 
+  rownames_to_column(var = "rowname") %>%
+  select("Xin", "Muraro", "Baron_Human", "Baron_Mouse", "SegerStolpe", "Zhou", "Bo", "Petropoulos1", "Nr", "rowname") %>%
+  arrange(Nr) %>%
+  column_to_rownames(var = "rowname") %>%
+  select(-Nr)
+  
+
+```
+
+
+## nopca
+
+```{r}
+medianF1_nopca_table  <- data.frame()
+duration_nopca_table  <- data.frame()
+
+rt <- report_table %>% filter(PreProc == "nopca")
+
+for (i in 1:dim(rt)[1]) {
+  row                            <- as.character(rt[i, "Method"])
+  col                            <- as.character(rt[i, "ModelName"])
+  medianF1                       <- round( rt[i, "MedianF1"],2)
+  medianF1_nopca_table[row, col] <- medianF1
+  duration                       <- round( rt[i, "duration"],0)
+  duration_nopca_table[row, col] <- duration
+}
+
+medianF1_nopca_table["svmLinear", "Nr"] <- 1
+medianF1_nopca_table["svmRadial", "Nr"] <- 2
+medianF1_nopca_table["rf", "Nr"]        <- 3
+medianF1_nopca_table["gbm", "Nr"]       <- 4
+
+medianF1_nopca_table %>% 
+  rownames_to_column(var = "rowname") %>%
+  select("Xin", "Muraro", "Baron_Human", "Baron_Mouse", "SegerStolpe", "Zhou", "Bo", "Petropoulos1", "Nr", "rowname") %>%
+  arrange(Nr) %>%
+  column_to_rownames(var = "rowname") %>%
+  select(-Nr)
+```
+
+
+```{r}
+duration_nopca_table["svmLinear", "Nr"] <- 1
+duration_nopca_table["svmRadial", "Nr"] <- 2
+duration_nopca_table["rf", "Nr"]        <- 3
+duration_nopca_table["gbm", "Nr"]       <- 4
+
+duration_nopca_table %>% 
+  rownames_to_column(var = "rowname") %>%
+  select("Xin", "Muraro", "Baron_Human", "Baron_Mouse", "SegerStolpe", "Zhou", "Bo", "Petropoulos1", "Nr", "rowname") %>%
+  arrange(Nr) %>%
+  column_to_rownames(var = "rowname") %>%
+  select(-Nr)
+
+```
+
+
+## logpca
+
+```{r}
+medianF1_logpca_table <- data.frame()
+duration_logpca_table <- data.frame()
+
+rt <- report_table %>% filter(PreProc == "logpca")
+
+for (i in 1:dim(rt)[1]) {
+  row                             <- as.character(rt[i, "Method"])
+  col                             <- as.character(rt[i, "ModelName"])
+  medianF1                        <- round( rt[i, "MedianF1"],2)
+  medianF1_logpca_table[row, col] <- medianF1
+  duration                        <- round( rt[i, "duration"],0)
+  duration_logpca_table[row, col] <- duration
+}
+
+medianF1_logpca_table["svmLinear", "Nr"] <- 1
+medianF1_logpca_table["svmRadial", "Nr"] <- 2
+medianF1_logpca_table["rf", "Nr"]        <- 3
+medianF1_logpca_table["gbm", "Nr"]       <- 4
+
+medianF1_logpca_table %>% 
+  rownames_to_column(var = "rowname") %>%
+  select("Xin", "Muraro", "Baron_Human", "Baron_Mouse", "SegerStolpe", "Zhou", "Bo", "Petropoulos1", "Nr", "rowname") %>%
+  arrange(Nr) %>%
+  column_to_rownames(var = "rowname") %>%
+  select(-Nr)
+```
+
+
+```{r}
+duration_logpca_table["svmLinear", "Nr"] <- 1
+duration_logpca_table["svmRadial", "Nr"] <- 2
+duration_logpca_table["rf", "Nr"]        <- 3
+duration_logpca_table["gbm", "Nr"]       <- 4
+
+duration_logpca_table %>% 
+  rownames_to_column(var = "rowname") %>%
+  select("Xin", "Muraro", "Baron_Human", "Baron_Mouse", "SegerStolpe", "Zhou", "Bo", "Petropoulos1", "Nr", "rowname") %>%
+  arrange(Nr) %>%
+  column_to_rownames(var = "rowname") %>%
+  select(-Nr)
+
+```
+
+
+
+
+```{r}
+
+colr <- RColorBrewer::brewer.pal(9, "GnBu")
+
+
+cpd <- report_table %>%
+  mutate (PreProc  = as.character(PreProc)) %>%
+  mutate (PreProc  = replace(PreProc, PreProc == "nopca" , "No PCA")) %>%
+  mutate (PreProc  = replace(PreProc, PreProc == "pca" ,    "Just PCA")) %>%  
+  mutate (PreProc  = replace(PreProc, PreProc == "logpca", "Log and PCA"))
+
+cpd$Method    <- factor(cpd$Method, levels=c("svmLinear", "svmRadial", "rf", "gbm"))
+cpd$ModelName <- factor(cpd$ModelName, levels=c("Xin", "Muraro" , "Baron_Human",  "Baron_Mouse", "SegerStolpe", "Zhou",  "Bo", "Petropoulos1"))
+    
+ggplot(cpd, aes(x = Method, y = MedianF1, fill = as.factor(Method))) +
+  geom_bar(stat= "identity", width = 0.3) +
+  facet_grid (vars(ModelName), vars(PreProc)) +
+  scale_fill_manual(values = c(colr[2], colr[4], colr[6], colr[7]) ) +
+  ylim(0, 1) +
+  ylab("Median F1") +
+  theme_light() +
+  theme(legend.title=element_blank()) 
+
+
+```

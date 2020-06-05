@@ -1,0 +1,203 @@
+---
+title: "Analyse Datasets and Models"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+
+rm(list = ls())
+
+library(readr)
+library(tibble)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(Seurat)
+library(caret)
+library(data.table)
+library(matrixStats)
+library(tictoc)                 # Used for timing of code
+library(MazamaCoreUtils)        # Used for logging messages to a file
+source("./Code/utilities.R")
+
+```
+
+
+```{r, initialise}
+
+proj_path   <- file.path(".")
+data_path   <- file.path(proj_path, "DataSets")
+log_path    <- file.path(proj_path, "Logs")
+rdata_path  <- file.path(proj_path, "rData")
+config_path <- file.path(proj_path, "config")
+
+
+data_sets <- list(  
+  "Xin",          # 1,449 cells, 33,889 genes
+  "Muraro",       # 2,122 cells, 18,915 genes  
+   # "Baron_Human",  # 8,569 cells, 17,499 genes
+  "Baron_Mouse",  # 1,886 cells, 14,861 genes
+  "SegerStolpe",  # 2,133 cells, 22,757 genes 
+  "Zhou",         # 2,554 cells, 19,046 genes
+  "Bo",           # 516   cells, 56,924 genes
+  "Petropoulos1"  # 1,529 cells, 26,178 genes
+)
+
+
+results_table   <- data.frame()
+coherence_table <- data.frame()
+
+```
+
+
+
+```{r, Process}
+
+
+  
+for (i in 1:length(data_sets)) {
+  dataset_name <- data_sets[[i]][1]
+  cat(sprintf("%s\n", dataset_name))
+  
+  
+  ####################################################
+  # Read the data
+  ####################################################
+  
+  retd                   <- load_single_data(rdata_path, dataset_name)
+  data                   <- retd$data
+  labels                 <- retd$labels
+  
+  ####################################################
+  # Normal model
+  ####################################################
+  
+  # Read the normal model
+  retn                   <- load_single_model(rdata_path, dataset_name, "gbm", "pca")
+  single_model           <- retn$model_information[["model"]]
+  single_preproc_model   <- retn$model_information[["preproc_model"]]
+  trainRowNumbers        <- retn$model_information[["preproc_model"]]
+  top_genes              <- retn$model_information[["top_genes"]]
+  features_limit         <- retn$model_information[["features_limit"]]
+  
+  # Limit the data set to the number of genes specified in 'features_limit' (1000 has been found to be a good choice)
+  top_genes              <- top_genes[1:features_limit]
+  ldata                  <- as.data.frame(data[top_genes])
+  ldata                  <- cbind.data.frame(labels, ldata)
+  ldata                  <- ldata %>% select(-one_of("cell_id"))
+  trainRowNumbers        <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
+  
+  
+  test_data              <- ldata[-trainRowNumbers,]
+  
+  # First preprocess
+  pp_data                <- predict(single_preproc_model, test_data)
+  
+  # Then predict
+  predicted_classes      <- predict(single_model, pp_data)
+  
+  cm                     <- confusionMatrix(predicted_classes,
+                                            test_data$ident,
+                                            mode = "everything",
+                                            dnn  = c("Predicted", "Reference"))
+  medianF1               <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  meanF1                 <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  
+  results_row            <- data.frame(Mode    = "Normal",
+                                       Dataset = dataset_name,
+                                       Median  = medianF1,
+                                       Mean    = meanF1
+                                       )
+  results_table          <- rbind(results_table, results_row)
+
+  
+  ####################################################
+  # Cluster model
+  ####################################################
+  
+  # Read the cluster normal model
+  retc                   <- load_cluster_model(rdata_path, dataset_name, "gbm", "pca")
+  cluster_model          <- retc$model_information[["model"]]
+  cluster_preproc_model  <- retc$model_information[["preproc_model"]]
+  top_genes              <- retc$model_information[["top_genes"]]
+  features_limit         <- retc$model_information[["features_limit"]]
+  weighted_coherence     <- retc$model_information[["weighted_coherence"]]
+  
+  # Limit the data set to the number of genes specified in 'features_limit' (1000 has been found to be a good choice)
+  top_genes              <- top_genes[1:features_limit]
+  ldata                  <- as.data.frame(data[top_genes])
+  ldata                  <- cbind.data.frame(labels, ldata)
+  ldata                  <- ldata %>% select(-one_of("cell_id"))
+  trainRowNumbers        <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
+  test_data              <- ldata[-trainRowNumbers,]
+  
+  # First preprocess
+  pp_data                <- predict(cluster_preproc_model, test_data)
+  
+  # Then predict
+  predicted_classes      <- predict(cluster_model, pp_data)
+  
+  cm                     <- confusionMatrix(predicted_classes,
+                                            test_data$ident,
+                                            mode = "everything",
+                                            dnn  = c("Predicted", "Reference"))
+  medianF1               <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  meanF1                 <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  
+  results_row            <- data.frame(Mode    = "Cluster",
+                                       Dataset = dataset_name,
+                                       Median  = medianF1,
+                                       Mean    = meanF1)
+  results_table          <- rbind(results_table, results_row)
+  
+  coherence_row          <- data.frame(Dataset             = dataset_name,
+                                       weighted_coherence  = weighted_coherence)
+  coherence_table        <- rbind(coherence_table, coherence_row)
+
+}
+
+
+```
+
+
+```{r}
+ggplot(results_table, aes(x = Dataset, y = Median)) +
+  geom_point() +
+  scale_y_continuous(limits = c(0, 1.05)) + 
+  facet_wrap( ~ Mode) +
+  theme_light() +
+  labs(y = "Median F1") +  
+  labs(x = "Model")
+```
+
+
+
+```{r}
+ggplot(coherence_table, aes(x = Dataset,  y = weighted_coherence)) +
+  geom_point() +
+  scale_y_continuous(limits = c(0, 1.05)) + 
+  theme_light() +
+  labs(y = "Coherence") +  
+  labs(x = "Model")
+```
+
+```{r}
+ggplot(results_table, aes(x = Mode,  Median)) +
+  geom_point() +
+  scale_y_continuous(limits = c(0, 1.05)) + 
+  facet_wrap( ~ Dataset) +
+  theme_light() +
+  labs(y = "Median F1") +  
+  labs(x = "Model")
+```
+
+
+

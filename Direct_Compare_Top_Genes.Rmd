@@ -135,7 +135,7 @@ top_genes_nr  <- c(5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000)
 
 for (dataset_name in datasets) {
   
-  # Read data
+  # Read data from csv source (alternatively you can get the processed rData file with load_single_data)
   ret    <- read_dataset(data_path, dataset_name)
   data   <- ret$data
   labels <- ret$labels

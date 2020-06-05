@@ -20,10 +20,6 @@ Both data frames hold as row name the cell id.
 
 read_dataset <- function (data_path, dataset_name) {
    
-   # Set timer
-   logger.info("Info: Started reading data from dataset %s", dataset_name)
-   tic(msg = "", quiet = TRUE)
-   
    # Read the data and labels and format names
    data      <- read.csv(file.path(data_path, dataset_name, "Data.csv"), 
                          stringsAsFactors = FALSE, 
@@ -77,11 +73,6 @@ read_dataset <- function (data_path, dataset_name) {
      cat(sprintf("%-25s %d\n", names(table(labels$ident)[i]), table(labels$ident)[i]))
    }
    cat(sprintf("\n"))
-       
-   # Report timer
-   toc(log=TRUE, quiet = TRUE)
-   logger.info("Info: Finished reading data from dataset %s%s", dataset_name, tic.log()[[1]])
-   tic.clearlog()
    
    return (list(data   = data, 
                 labels = labels))

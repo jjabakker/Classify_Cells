@@ -26,7 +26,7 @@ calc_coherence <- function(seurat_object) {
   weighted_coherence      <- weighted_coherence / sum( cluster_table[, "Count"])
   rownames(cluster_table) <- c(0: (dim(cluster_table)[1] - 1))
   cluster_table           <- cluster_table %>% arrange(Class)
-  return ( list(cluster_table = cluster_table, 
+  return ( list(cluster_table      = cluster_table, 
                 weighted_coherence = weighted_coherence))
 }
 

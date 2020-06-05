@@ -72,7 +72,7 @@ library(matrixStats)
 library(GGally)
 
 source("Code/Predict/read_model_and_data.R")
-
+source("Code/utilities.R")
 ```
 
 
@@ -107,7 +107,7 @@ report_out      <- data.frame()
 class_summaries <- list()
 
 # Information of all missing genes is stored
-missing_cols    <- data.frame(ModelData = character(), TestData = character(), Missing = numeric())
+missing_cols    <- data.frame()
 
 ```
 
@@ -124,29 +124,33 @@ for (row in 1:nrow(to_review)) {
   model_name      <- to_review[row, "ModelData"]
   dataset_name    <- to_review[row, "TestData"]
   
-  ret <- read_model_and_data(rdata_path, model_name, dataset_name, preproc_method)
+  #ret            <- read_model_and_data(rdata_path, model_name, dataset_name, preproc_method)
+  retd             <-load_single_data(rdata_path, dataset_name )
+  retm            <- load_single_model(rdata_path, model_name, method, preproc_method)
   
-  preproc_model   <- ret$model[["preproc_model"]]
-  model           <- ret$model[["model_gbm"]]
-  features_limit  <- ret$model[["features_limit"]]
-  PCA_Threshold   <- ret$model[["PCA_Threshold"]]
-  top_genes       <- ret$model[["top_genes"]]
+  preproc_model   <- retm$model_information[["preproc_model"]]
+  model           <- retm$model_information[["model"]]
+  features_limit  <- retm$model_information[["features_limit"]]
+  PCA_Threshold   <- retm$model_information[["PCA_Threshold"]]
+  top_genes       <- retm$model_information[["top_genes"]]
   
-  data            <- ret$data[["data"]]
-  labels          <- ret$data[["labels"]]
-  trainRowNumbers <- ret$data[["trainRowNumbers"]]
+  data            <- retd$data
+  labels          <- retd$labels
   
   if (log_preprocess) {
     data <- log(1 + data)
   }
   
   # In case the model and data set are the same, you do not want to predict on the whole dataset, but only on the part
-  # that was not used for training. In that case eliminate the training records,
-  if (model_name == dataset_name) {
-    data   <- data[-trainRowNumbers,]
-    labels <- labels[-trainRowNumbers,]
-    labels <- as.data.frame(labels)
-  }
+  # that was not used for training.
+  # Now you use the whole dataset (and also the part that you used to train, so there will be an oveestimation of median F1 in these cases
+  
+  # if (model_name == dataset_name) {
+  #   data   <- data[-trainRowNumbers,]
+  #   labels <- labels[-trainRowNumbers,]
+  #   labels <- as.data.frame(labels)
+  # }
+  
   
   # Only needed when dataset_names is not model_name, i.e. in case of inter-set predicting 
   # Check if there are top genes missing in the dataset, and if so provide dummy values 
@@ -408,14 +412,14 @@ ggplot(report, aes(x = TestData, y = medianF1, fill = Model, dotsize = Genes)) +
 
 
 ```{r}
-report$Genes <- as.factor(report$Genes)
-ggplot(report, aes(x = TestData, y = medianF1, col = Model, size = Genes)) +
-  geom_point() +
-  scale_y_continuous(limits = c(0, 1)) + 
-  facet_grid(Model ~ .) +
-  theme_light() +
-  labs(y = "Median F1") +  
-  labs(x = "Test Dataset")
+  report$Genes <- as.factor(report$Genes)
+  ggplot(report, aes(x = TestData, y = medianF1, col = Model, size = Genes)) +
+    geom_point() +
+    scale_y_continuous(limits = c(0, 1.05)) + 
+    facet_grid(Model ~ .) +
+    theme_light() +
+    labs(y = "Median F1") +  
+    labs(x = "Test Dataset")
 ```
 
 
