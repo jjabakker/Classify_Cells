@@ -156,6 +156,16 @@ for (dataset_name in datasets) {
   minFeature          <- config_data["minFeature", "Value"] 
   maxFeature          <- config_data["maxFeature", "Value"] 
   
+  ########################################
+  # Overrule settings from config file
+  ########################################
+
+  min_class_size      <- 10 
+  minCount            <- 0 
+  maxCount            <- -1
+  minFeature          <- 0 
+  maxFeature          <- -1 
+
   ret                 <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
   data                <- ret$data
   labels              <- ret$labels
@@ -251,9 +261,17 @@ for (dataset_name in datasets) {
     time <- tic.log()[[1]]
     tic.clearlog()
     
+    if (class(cm[["byClass"]]) == "numeric") {
+      medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+      meanF1       <- mean(cm[["byClass"]]["F1"], na.rm = TRUE) 
+    } else {
+      medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+      meanF1       <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE) 
+    }
+    
     result            <- data.frame(dataset_name = dataset_name,
                                     top_genes    = nr,
-                                    medianF1     = median(cm[["byClass"]][,"F1"], na.rm = TRUE),
+                                    medianF1     = medianF1,
                                     time         = time)
     
     results <- rbind(results, result)

@@ -67,14 +67,10 @@ TRAIN_GBM       <- TRUE
 TRAIN_GLMNET    <- FALSE
 
 # Summary results will be kept here 
-report_out <- data.frame(Method     = character(),
-                         ModelData  = character(),
-                         TestData   = character(),
-                         Accuracy   = numeric(),
-                         Confidence = numeric())
+report_out       <- data.frame()
 
 # Information of all the runs will be gathered in the class_summaries list  
-class_summaries <- list()
+class_summaries  <- list()
 
 proj_path        <- file.path(".")
 data_path        <- file.path(proj_path, "DataSets")
@@ -87,6 +83,7 @@ dataset_filename <- paste0(dataset_name, "_ambxxxx")
 logger.setup (infoLog = file.path(log_path, "amb.log"))
 
 amb_list         <- list()
+
 ```
 
 
@@ -254,7 +251,7 @@ model_info = list(
   p1            = p1,
   p2            = p2,
   cm            = cm,
-  predicted     = Predicted,
+  predicted     = predicted_classes,
   class_summary = class_summary,
   preproc_model = preproc_model,      
   model_gbm     = model_gbm
@@ -281,8 +278,8 @@ labels               <- save_labels
 pp_data              <- predict(amb_list[["AMB"]][["preproc_model"]], data)
 predicted_classes    <- predict(amb_list[["AMB"]][["model_gbm"]], pp_data)
 
-ll <- labels
-ll <- cbind(ll, predicted_classes)
+ll                   <- labels
+ll                   <- cbind(ll, predicted_classes)
 
 table(predicted_classes)
 
@@ -295,12 +292,17 @@ glutamatergic_labels <- labels[which(predicted_classes == "Glutamatergic"),]
 nonneuronal_data     <- data[which(predicted_classes   == "Non.Neuronal"),]
 nonneuronal_labels   <- labels[which(predicted_classes == "Non.Neuronal"),]
 
-class_models_to_train <- c("GABAergic", "Glutamatergic", "Non.Neuronal")
+class_models_to_train <- c("GABAergic", 
+                           "Glutamatergic")
+
+#                           "Non.Neuronal")
+
+class_models_to_train <- c("Non.Neuronal")
 
 data_to_be_used <- list(
     "GABAergic"     = gabaergic_data,
-    "Glutamatergic" = glutamatergic_data
-   # "Non.Neuronal"  = nonneuronal_data
+    "Glutamatergic" = glutamatergic_data,
+    "Non.Neuronal"  = nonneuronal_data
     )
 
 labels_to_be_used <- list(
@@ -334,15 +336,15 @@ for (m in class_models_to_train) {
     p1            = p1,
     p2            = p2,
     cm            = cm,
-    predicted     = Predicted,
+    predicted     = predicted_classes,
     class_summary = class_summary,
     preproc_model = preproc_model,      
     model_gbm     = model_gbm
   )
   amb_list[[m]] <- model_info
     
-  ll <- labels
-  ll <- cbind(ll, predicted_classes)
+  #ll <- labels
+  #ll <- cbind(ll, predicted_classes)
   
   grid.arrange(p1, p2, ncol=2, top = m)
   
@@ -402,6 +404,12 @@ gabaergic_subclass_list <- c(
   "Vip"
   )
 
+gabaergic_subclass_list <- c(
+
+  "Serpinf1"
+
+  )
+
 gabaergic_data_list <- list(
   "Pvalb"    = pvalb_data,
   "Lamp5"    = lamp5_data,
@@ -440,15 +448,15 @@ for (m in gabaergic_subclass_list) {
     p1            = p1,
     p2            = p2,
     cm            = cm,
-    predicted     = Predicted,
+    predicted     = predicted_classes,
     class_summary = class_summary,
     preproc_model = preproc_model,      
     model_gbm     = model_gbm
   )
   amb_list[[m]] = model_info
   
-  ll <- labels
-  ll <- cbind(ll, predicted_classes)
+  #ll <- labels
+  #ll <- cbind(ll, predicted_classes)
   
   grid.arrange(p1, p2, ncol=2, top = m)
   
@@ -456,6 +464,8 @@ for (m in gabaergic_subclass_list) {
   toc(log = TRUE, quiet = TRUE)
   logger.info("Info: Ended training %s cluster %s", m, tic.log()[[1]])
   tic.clearlog()
+  
+  print(amb_list)
 }
 
 ```
@@ -472,8 +482,8 @@ labels               <- glutamatergic_labels
 pp_data              <- predict(amb_list[["Glutamatergic"]][["preproc_model"]], data)
 predicted_classes    <- predict(amb_list[["Glutamatergic"]][["model_gbm"]], pp_data)
 
-ll <- labels
-ll <- cbind(ll, predicted_classes)
+ll                   <- labels
+ll                   <- cbind(ll, predicted_classes)
 
 table(predicted_classes)
 
@@ -558,15 +568,15 @@ for (m in glutamatergic_subclass_list) {
     p1            = p1,
     p2            = p2,
     cm            = cm,
-    predicted     = Predicted,
+    predicted     = predicted_classes,
     class_summary = class_summary,
     preproc_model = preproc_model,      
     model_gbm     = model_gbm
   )
   amb_list[[m]] = model_info
   
-  ll <- labels
-  ll <- cbind(ll, predicted_classes)
+  #ll <- labels
+  #ll <- cbind(ll, predicted_classes)
   
   grid.arrange(p1, p2, ncol=2, top = m)
   
@@ -580,9 +590,40 @@ for (m in glutamatergic_subclass_list) {
 
 
 ```{r}
+
 save(amb_list, file = file.path(rdata_path, "amb_list.Rdata"))
+
 ```
 
+
+
+
+
+```{r}
+for (i in 1:length(amb_list)) 
+{
+  sumtotal        <- 0
+  sumtotal_meanF1 <- 0
+  
+  amb_rec <- amb_list[[i]]
+  cm <- amb_rec[["cm"]]
+    
+  if (class(cm[["byClass"]]) == "numeric") {
+    medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]]["F1"], na.rm = TRUE) 
+  } else {
+    medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE) 
+  }
+  
+  cat(sprintf("meanF1 for %14s with %4d cells is %4.2f\n", names(amb_list[i]), sum(cm[["table"]]), meanF1))
+  sumtotal_meanF1 <- sumtotal_meanF1 + sum(cm[["table"]]) * meanF1
+  sumtotal        <- sumtotal + sum(cm[["table"]]) 
+}
+
+meanF1 <- sumtotal_meanF1 / sumtotal
+  
+```
 
 
 

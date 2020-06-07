@@ -25,7 +25,7 @@ read_config <- function (config_path, dataset_name) {
   min_class_size     <- ifelse(config, as.integer(config_data["min_class_size", "Value"]),     10)
   
   # Less than 10 really gives a problem
-  min_class_size     <- min(min_class_size, 10)
+  min_class_size     <- max(min_class_size, 10)
   
   # Parameter to determine the cluster resolution. 
   # Usually between 0.1 and 2. A higher number will generate more clusters
@@ -93,7 +93,7 @@ process_config <- function (min_class_size, minCount, maxCount, minFeature, maxF
   if (min_class_size != -1) {
     
     removed_classes     <- !(table(labels$ident) > min_class_size)
-    cells_to_keep       <- !(is.element(labels[,1], names(removed_classes)[removed_classes]))
+    cells_to_keep       <- !(is.element(labels[, 1], names(removed_classes)[removed_classes]))
     
     ori                 <- dim(data)[1]
     data                <- data[cells_to_keep,]
@@ -103,6 +103,7 @@ process_config <- function (min_class_size, minCount, maxCount, minFeature, maxF
     rm(removed_classes, cells_to_keep)
     
     # Show composition
+    
     cat(sprintf("\n\nDataset after removing small classes.\n"))
     cat(sprintf("Removed %d cells from small classes \n\n", ori - dim(data)[1] )) 
     cat(sprintf("There are %d cells and %d features.\n", dim(data)[1], dim(data)[2]))
@@ -118,6 +119,7 @@ process_config <- function (min_class_size, minCount, maxCount, minFeature, maxF
   ####################################################################################
   
   # Compile the metadata from the count table
+  
   metaData     <-  data.frame(
     nCount_RNA   = rowSums(data),
     nFeature_RNA = (dim(data)[2] - rowCounts(as.matrix(data), value = 0))
@@ -132,7 +134,6 @@ process_config <- function (min_class_size, minCount, maxCount, minFeature, maxF
   
   title_string <- sprintf("Plot 1: The data without limits")
   grid.arrange(p1, p2, ncol=2, top = title_string)
-  
   
   p1 <- ggplot(metaData, aes(x=1, y = nFeature_RNA)) + 
     geom_violin(aes(color="green"), show.legend = FALSE) + 
@@ -153,6 +154,7 @@ process_config <- function (min_class_size, minCount, maxCount, minFeature, maxF
   
   
   # Now select the cells to keep and which ones to drop
+  
   cellIndex <- metaData$nCount_RNA   > minCount & 
     metaData$nFeature_RNA > minFeature
   if (maxCount != -1) {
@@ -171,6 +173,7 @@ process_config <- function (min_class_size, minCount, maxCount, minFeature, maxF
   labels  <- as.data.frame(labels[cellIndex,])
   
   # Show composition
+  
   cat(sprintf("\n\nData set after correction for invalid cells\n"))
   cat(sprintf("Removed %d cells\n\n", sum(cellIndex == FALSE))) 
   cat(sprintf("\nThere are %d cells and %d features.\n", dim(data)[1], dim(data)[2]))
@@ -189,6 +192,7 @@ process_config <- function (min_class_size, minCount, maxCount, minFeature, maxF
   dim(data) 
   
   # Show composition
+  
   cat(sprintf("\n\nCorrection for genes that do not occur in any cell\n"))
   cat(sprintf("Removed %d 'all zero' genes\n", ori - dim(data)[2])) 
   cat(sprintf("\nThere are %d cells and %d features.\n", dim(data)[1], dim(data)[2]))

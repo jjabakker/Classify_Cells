@@ -354,8 +354,8 @@ for (row in 1:nrow(to_review)) {
                              Accuracy     = Accuracy,
                              CorrAccuracy = CorrAccuracy,
                              Confidence   = mean(Predicted$Max),
-                             medianF1     = median(cm[["byClass"]][,"F1"], na.rm = TRUE),
-                             meanF1       = mean(cm[["byClass"]][,"F1"], na.rm = TRUE)) 
+                             medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE),
+                             meanF1       <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE)) 
    
   report_out   <- rbind(report_out, new)
 }

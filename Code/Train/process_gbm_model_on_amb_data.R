@@ -7,9 +7,9 @@ preproc_method <- "pca"
 
 source("Code/Predict/predict_model_with_labels.R")
 
-labels$ident <- labels[ , classification_category] 
-labels       <- select(labels, ident, everything())
-labels$ident <- factor(labels$ident)
+labels$ident        <- labels[ , classification_category] 
+labels              <- select(labels, ident, everything())
+labels$ident        <- factor(labels$ident)
 
 # Remove small classes
 min_class_size      <- 10
@@ -97,22 +97,25 @@ ret            <- predict_model_with_labels(method         = method,
                                             labels         = test_data[,1:2], 
                                             report_out     = report_out)
 
-report_out     <- ret$report_out
+report_out        <- ret$report_out
+class_summary     <- ret$predicted_classes
+predicted_classes <- ret$predicted_classes
+p1                <- ret$p1
+p2                <- ret$p2
 
-cat(sprintf("Percentage correct after setting a threshold of %2.1f moves from %2.1f%% to %2.1f%% (%2.f%% unassigned)\n", 
-            min_prob_value,
-            correct_predicted_percentage,
-            correct_assigned_percentage,
-            unassigned_percentage))
-
-cm <- confusionMatrix(test_data[,1],
-                      predicted_classes,
-                      mode = "everything",
-                      dnn = c("Reference", "Predicted"))
-gbm_accuracy <- cm[["overall"]][["Accuracy"]]
+cm                <- confusionMatrix(test_data[,1],
+                                     predicted_classes,
+                                     mode = "everything",
+                                     dnn = c("Reference", "Predicted"))
+accuracy         <- cm[["overall"]][["Accuracy"]]
 
 
-#knitr::kable(class_summary, digits = 3, caption = "Class Summary overview")
+if (class(cm[["byClass"]]) == "numeric") {
+  medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+} else {
+  medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+}
+
 
 print(class_summary)
 

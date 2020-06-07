@@ -183,6 +183,16 @@ maxCount            <- config_data["maxCount", "Value"]
 minFeature          <- config_data["minFeature", "Value"] 
 maxFeature          <- config_data["maxFeature", "Value"] 
 
+########################################
+# Overrule settings from config file
+########################################
+
+min_class_size      <- 10 
+minCount            <- 0 
+maxCount            <- -1
+minFeature          <- 0 
+maxFeature          <- -1 
+  
 ret                 <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
 data                <- ret$data
 labels              <- ret$labels
@@ -420,8 +430,13 @@ if (TRAIN_SVML) {
                         dnn=c("Reference", "Predicted"))
   cm
   svml_accuracy <- cm[["overall"]][["Accuracy"]]
-  svml_medianF1 <- median(cm[["byClass"]][,"F1"], na.rm = TRUE) 
   
+  if (class(cm[["byClass"]]) == "numeric") {
+    svml_medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+  } else {
+    svml_medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  }
+
   toc(log=TRUE, quiet = TRUE)
   logger.info("Info: Finished training svmLinear with dataset %s%s", dataset_name, tic.log()[[1]])
   tic.clearlog()
@@ -463,8 +478,13 @@ if (TRAIN_SVMR) {
                         dnn=c("Reference", "Predicted"))
   cm
   svmr_accuracy <- cm[["overall"]][["Accuracy"]]
-  svmr_medianF1 <- median(cm[["byClass"]][,"F1"], na.rm = TRUE) 
   
+  if (class(cm[["byClass"]]) == "numeric") {
+    svmr_medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+  } else {
+    svmr_medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  }
+
   toc(log=TRUE, quiet = TRUE)
   logger.info("Info: Finished training svm Radial with dataset %s. %s", dataset_name, tic.log()[[1]])
   tic.clearlog()
@@ -506,8 +526,13 @@ if (TRAIN_RF) {
                         dnn=c("Reference", "Predicted"))
   cm
   rf_accuracy <- cm[["overall"]][["Accuracy"]]
-  rf_medianF1 <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)  
   
+  if (class(cm[["byClass"]]) == "numeric") {
+    rf_medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+  } else {
+    rf_medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  }
+
   toc(log=TRUE, quiet = TRUE)
   logger.info("Info: Finished training Random Forest with dataset %s%s", dataset_name, tic.log()[[1]])
   tic.clearlog()
@@ -549,8 +574,13 @@ if (TRAIN_GBM) {
                         dnn=c("Reference", "Predicted"))
   cm
   gbm_accuracy <- cm[["overall"]][["Accuracy"]]
-  gbm_medianF1 <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)    
   
+  if (class(cm[["byClass"]]) == "numeric") {
+    gbmnet_medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+  } else {
+    gbmnet_medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  }
+
   toc(log=TRUE, quiet = TRUE)
   logger.info("Info: Finished training gbm with dataset %s. %s", dataset_name, tic.log()[[1]])
   tic.clearlog()
@@ -593,7 +623,12 @@ if (TRAIN_GLMNET) {
                         dnn=c("Reference", "Predicted"))
   cm
   glmnet_accuracy <- cm[["overall"]][["Accuracy"]]
-  glmnet_medianF1 <- median(cm[["byClass"]][,"F1"], na.rm = TRUE) 
+  
+  if (class(cm[["byClass"]]) == "numeric") {
+    glmnet_medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+  } else {
+    glmnet_medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  }
   
   toc(log = TRUE, quiet = TRUE)
   logger.info("Info: Finished training glmnet with dataset %s. %s", dataset_name, tic.log()[[1]])

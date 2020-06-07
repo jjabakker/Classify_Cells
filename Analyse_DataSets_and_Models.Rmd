@@ -15,14 +15,27 @@ knitr::opts_chunk$set(echo = TRUE)
 rm(list = ls())
 
 library(tidyverse)
+library(readr)
+library(tibble)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(caret)
+library(data.table)
+library(matrixStats)
+library(tictoc)                 # Used for timing of code
+library(MazamaCoreUtils)        # Used for logging messages to a file
+
 source("./Code/utilities.R")
+source("./Code/Train/read_dataset.R")
+source("./Code/Train/process_config.R")
+
 
 ```
 
 
 ```{r, initialise}
-
-
 
 READ_FRESH = TRUE
 
@@ -49,8 +62,183 @@ class_names <- list()
 class_freq  <- list()
 top_genes   <- list()
 
+ds_table    <- data.frame()
+
 ```
 
+
+# Generate data overview (cells, genes, classe - before and after small cell correction) 
+
+```{r}
+
+for (dataset_name in data_sets) {
+  
+  cat(sprintf("\n\n\nProcessing %s\n\n", dataset_name))
+
+  # Set the data and model name and read the data
+  ret                <- read_dataset(data_path, dataset_name)
+  data               <- ret$data
+  labels             <- ret$labels
+  
+  dim_uncorrected <- dim(data)
+  class_uncorrected  <- table(labels$ident)
+  
+  print(dim_uncorrected)
+  print(class_uncorrected)
+  
+  ########################################
+  # Overrule settings from config file
+  ########################################
+
+  min_class_size      <- 10 
+  minCount            <- 0 
+  maxCount            <- -1
+  minFeature          <- 0 
+  maxFeature          <- -1   
+
+  ret              <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
+  data             <- ret$data
+  labels           <- ret$labels
+  
+  dim_corrected    <- dim(data)
+  class_corrected  <- table(labels$ident)
+
+  print(dim_corrected)
+  print(class_corrected)
+  
+  ds_row <- data.frame(Cells       = dim_uncorrected[1],
+                       Genes       = dim_uncorrected[2],
+                       Classes     = length (class_uncorrected),
+                       Cells_Cor   = dim_corrected[1],
+                       Genes_Cor   = dim_corrected[2],
+                       Classes_Cor = length (class_corrected))
+  rownames(ds_row)[1] <- datset_name
+  ds_table            <- rbind(ds_table, ds_row)
+  print(ds_table)
+}
+
+ds_table
+
+```
+
+```{r}
+dataset_name <- "AMB"
+cat(sprintf("\n\n\nProcessing %s\n\n", dataset_name))
+
+# Set the data and model name and read the data
+ret                <- read_dataset(data_path, dataset_name)
+data               <- ret$data
+labels             <- ret$labels
+
+dim_uncorrected             <- dim(data)
+class_ident_uncorrected     <- table(labels$ident)
+class_subclass_uncorrected  <- table(labels$Subclass)
+class_cluster_uncorrected   <- table(labels$cluster)
+
+print(dim_uncorrected)
+print(class_ident_uncorrected)
+print(class_subclass_uncorrected)
+print(class_cluster_uncorrected)
+
+saved_data   <- data
+saved_labels <- labels
+
+########################################
+# Overrule settings from config file
+########################################
+
+min_class_size      <- 10 
+minCount            <- 0 
+maxCount            <- -1
+minFeature          <- 0 
+maxFeature          <- -1   
+
+
+# Process the ident level
+data               <- saved_data 
+labels             <- saved_labels 
+labels_to_process  <- select(labels, "ident", "cell_id")
+ret                <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels_to_process)
+data               <- ret$data
+labels             <- ret$labels
+
+dim_corrected          <- dim(data)
+class_ident_corrected  <- table(labels$ident)
+
+print(dim_corrected)
+print(class_ident_corrected)
+
+ds_row <- data.frame(Cells       = dim_uncorrected[1],
+                     Genes       = dim_uncorrected[2],
+                     Classes     = length (class_ident_uncorrected),
+                     Cells_Cor   = dim_corrected[1],
+                     Genes_Cor   = dim_corrected[2],
+                     Classes_Cor = length (class_ident_corrected))
+rownames(ds_row)[1] <- "AMB 1"
+ds_table            <- rbind(ds_table, ds_row)
+print(ds_table)
+  
+
+# Process the subclass level
+data               <- saved_data 
+labels             <- saved_labels
+labels_to_process  <- select(labels, "Subclass", "cell_id")
+colnames(labels_to_process)[1]  <-  "ident"
+ret                <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels_to_process)
+data               <- ret$data
+labels             <- ret$labels
+
+dim_subclass_corrected          <- dim(data)
+class_subclass_corrected        <- table(labels$ident)
+
+print(dim_corrected)
+print(class_subclass_corrected)
+
+ds_row <- data.frame(Cells       = dim_uncorrected[1],
+                     Genes       = dim_uncorrected[2],
+                     Classes     = length (class_subclass_uncorrected),
+                     Cells_Cor   = dim_subclass_corrected[1],
+                     Genes_Cor   = dim_subclass_corrected[2],
+                     Classes_Cor = length (class_subclass_corrected))
+
+rownames(ds_row)[1] <- "AMB 2"
+ds_table            <- rbind(ds_table, ds_row)
+
+print(ds_table)
+
+# Process the cluster level
+data               <- saved_data 
+labels             <- saved_labels
+labels_to_process  <- select(labels, "cluster", "cell_id")
+colnames(labels_to_process)[1]  <-  "ident"
+ret                <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels_to_process)
+data               <- ret$data
+labels             <- ret$labels
+
+dim_cluster_corrected          <- dim(data)
+class_cluster_corrected        <- table(labels$ident)
+
+print(dim_corrected)
+print(class_cluster_corrected)
+
+ds_row <- data.frame(Cells       = dim_uncorrected[1],
+                     Genes       = dim_uncorrected[2],
+                     Classes     = length (class_cluster_uncorrected),
+                     Cells_Cor   = dim_cluster_corrected[1],
+                     Genes_Cor   = dim_cluster_corrected[2],
+                     Classes_Cor = length (class_cluster_corrected))
+
+rownames(ds_row)[1] <- "AMB 3"
+ds_table            <- rbind(ds_table, ds_row)
+
+print(ds_table)
+```
+
+
+
+
+
+It is not necessary to read in the data again, but just to avoidinconsistency. The above was done becaise we needed bith umporcesses and processed. For the remainder in the file you need only processed.  
 
 
 ```{r, read data}
@@ -63,7 +251,7 @@ if (READ_FRESH) {
     dataset_name <- data_sets[[ii]][1]
     cat(sprintf("%s\n", dataset_name))
     
-    ret <- load_single_data(rdata_path, dataset_name)
+    ret    <- load_single_data(rdata_path, dataset_name)
     data   <- ret$data
     labels <- ret$labels
 

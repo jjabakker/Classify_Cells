@@ -150,6 +150,16 @@ for (row in 1:nrow(to_review)) {
   minFeature                 <- config_data["minFeature", "Value"] 
   maxFeature                 <- config_data["maxFeature", "Value"] 
   
+  ########################################
+  # Overrule settings from config file
+  ########################################
+
+  min_class_size      <- 10 
+  minCount            <- 0 
+  maxCount            <- -1
+  minFeature          <- 0 
+  maxFeature          <- -1 
+
   ret                        <- process_config(min_class_size, 
                                                minCount, 
                                                maxCount, 
@@ -258,7 +268,7 @@ for (row in 1:nrow(to_review)) {
 
 ```{r}
 
-save(report_out, file = file.path(rdata_path, "embryonic_advanced.rData"))
+save(report_out, file = file.path(rdata_path, "report_zero.Rdata"))
 
 ```
 
@@ -295,6 +305,7 @@ combined_report       <- rbind(combined_report, report_anticipate_2)
 
 combined_report$Mode <- factor(combined_report$Mode, levels = c("Zero", "Anticipate 1", "Anticipate 2"))
 
+combined_report$Genes <- as.factor(combined_report$Genes)
 ggplot(combined_report, aes(x = Model, y = medianF1, col = TestData, size = Genes)) +
   geom_point() +
   scale_y_continuous(limits = c(0, 1.05)) + 

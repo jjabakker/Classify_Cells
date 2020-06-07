@@ -519,19 +519,21 @@ source("Code/Train/process_gbm_model_on_amb_data.R")
 p1_class            <- p1
 p2_class            <- p2
 cm_class            <- cm
-Predicted_class     <- Predicted
+Predicted_class     <- predicted_classes
 class_summary_class <- class_summary
 
 # Save
 file_name <- file.path(rdata_path, "amb_level_class.rData")
-save(cm, p1, p2, Predicted, class_summary, file = file_name)
+save(cm, p1, p2, Predicted, class_summary, accuracy, medianF1, file = file_name)
 
 # Report timer
 toc(log = TRUE, quiet = TRUE)
 logger.info("Info: Ended Class level%s", tic.log()[[1]])
 tic.clearlog()
 
+print (medianF1)
 ```
+0.9996505
 
 # Run GBM on Subclass level
 
@@ -553,19 +555,20 @@ source("Code/Train/process_gbm_model_on_amb_data.R")
 p1_subclass            <- p1
 p2_subclass            <- p2
 cm_subclass            <- cm
-Predicted_subclass     <- Predicted
+Predicted_subclass     <- predicted_classes
 class_summary_subclass <- class_summary
 
 # Save
 file_name <- file.path(rdata_path, "amb_level_subclass.rData")
-save(cm, p1, p2, Predicted, class_summary, file = file_name)
+save(cm, p1, p2, Predicted_subclass, class_summary_subclass, accuracy, medianF1, file = file_name)
 
 # Report timer
 toc(log = TRUE, quiet = TRUE)
 logger.info("Info: Ended Subclass level%s", tic.log()[[1]])
 tic.clearlog()
-
+print (medianF1)
 ```
+ 0.9856432
 
 # Run GBM on cluster level
 

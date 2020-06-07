@@ -191,14 +191,23 @@ evaluate <- function(labels, method, dataset_name, model_name, features_limit, p
   
   Pred2        <- Predicted[Predicted$Reliable == TRUE, c("Reliable", "Correct")]
   CorrAccuracy <- dim(Pred2[which(Pred2$Correct == TRUE),])[1]  / dim(Pred2)[1]
+  
+  if (class(cm[["byClass"]]) == "numeric") {
+    medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]]["F1"], na.rm = TRUE) 
+  } else {
+    medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE) 
+  }
+  
   new          <- data.frame(Method       = method,
                              ModelData    = model_name,
                              TestData     = dataset_name,
                              Accuracy     = Accuracy,
                              CorrAccuracy = CorrAccuracy,
                              Confidence   = mean(Predicted$Max),
-                             medianF1     = median(cm[["byClass"]][,"F1"], na.rm = TRUE),
-                             meanF1       = mean(cm[["byClass"]][,"F1"], na.rm = TRUE)) 
+                             medianF1     = medianF1,
+                             meanF1       = meanF1) 
   
   report_out   <- rbind(report_out, new)
   return (list(report_out = report_out))

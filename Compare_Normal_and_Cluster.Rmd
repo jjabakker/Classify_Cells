@@ -108,9 +108,15 @@ for (i in 1:length(data_sets)) {
                                             test_data$ident,
                                             mode = "everything",
                                             dnn  = c("Predicted", "Reference"))
-  medianF1               <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
-  meanF1                 <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE)
   
+  if (class(cm[["byClass"]]) == "numeric") {
+    medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]]["F1"], na.rm = TRUE) 
+  } else {
+    medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE) 
+  }
+
   results_row            <- data.frame(Mode    = "Normal",
                                        Dataset = dataset_name,
                                        Median  = medianF1,
@@ -149,8 +155,14 @@ for (i in 1:length(data_sets)) {
                                             test_data$ident,
                                             mode = "everything",
                                             dnn  = c("Predicted", "Reference"))
-  medianF1               <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
-  meanF1                 <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  
+  if (class(cm[["byClass"]]) == "numeric") {
+    medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]]["F1"], na.rm = TRUE) 
+  } else {
+    medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE) 
+  }
   
   results_row            <- data.frame(Mode    = "Cluster",
                                        Dataset = dataset_name,

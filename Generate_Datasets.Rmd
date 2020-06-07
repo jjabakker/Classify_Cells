@@ -31,6 +31,7 @@ library(MazamaCoreUtils)        # Used for logging messages to a file
 
 source("Code/Train/process_config.R")
 source("Code/Train/read_dataset.R")
+source("Code/utilities.R")
 
 proj_path   <- file.path(".")
 data_path   <- file.path(proj_path, "DataSets")
@@ -67,6 +68,17 @@ generate_dataset <- function (data_path, dataset_name) {
   minFeature     <- config_data["minFeature", "Value"] 
   maxFeature     <- config_data["maxFeature", "Value"] 
   
+
+  ########################################
+  # Overrule settings from config file
+  ########################################
+
+  min_class_size      <- 10 
+  minCount            <- 0 
+  maxCount            <- -1
+  minFeature          <- 0 
+  maxFeature          <- -1   
+
   ret            <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
   data           <- ret$data
   labels         <- ret$labels

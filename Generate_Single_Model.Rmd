@@ -52,7 +52,10 @@ Petropoulos1 # 1,529 cells, 26,178 genes
 
 # Select dataset
 
-dataset_name     <- "Xin"
+dataset_name     <- "Baron_Human"
+
+SVML      <- FALSE
+SVMR      <- FALSE
 
 ```
 
@@ -139,6 +142,16 @@ maxCount            <- config_data["maxCount", "Value"]
 minFeature          <- config_data["minFeature", "Value"] 
 maxFeature          <- config_data["maxFeature", "Value"] 
 
+########################################
+# Overrule settings from config file
+########################################
+
+min_class_size      <- 10 
+minCount            <- 0 
+maxCount            <- -1
+minFeature          <- 0 
+maxFeature          <- -1 
+  
 ret                 <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
 data                <- ret$data
 labels              <- ret$labels
@@ -289,7 +302,14 @@ train_and_test <- function (dataset_name,
   print(cm)
   
   accuracy          <- cm[["overall"]][["Accuracy"]]
-  medianF1          <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  
+  if (class(cm[["byClass"]]) == "numeric") {
+    medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]]["F1"], na.rm = TRUE) 
+  } else {
+    medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE) 
+  }
   
   print(class_summary)
   cat(sprintf("\nThe medianF1 for dataset %s, preprocessing %s, method %s is: %3.2f\n", 
@@ -326,59 +346,62 @@ train_and_test <- function (dataset_name,
 
 ```{r, fig.width = 5}
 
-meth <- "svmLinear"
-ppm  <- "pca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit = features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
-
+if (SVML) {
+  meth <- "svmLinear"
+  ppm  <- "pca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit = features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+}
 ```
 
 ### svmRadial
 
 ```{r, fig.width = 5}
 
-meth <- "svmRadial"
-ppm  <- "pca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit = features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+if (SVMR) {
+  meth <- "svmRadial"
+  ppm  <- "pca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit = features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+}
 
 ```
 

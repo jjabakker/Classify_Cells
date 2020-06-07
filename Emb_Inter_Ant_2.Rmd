@@ -160,6 +160,16 @@ for (row in 1:nrow(to_review)) {
   minFeature                 <- config_data["minFeature", "Value"] 
   maxFeature                 <- config_data["maxFeature", "Value"] 
   
+  ########################################
+  # Overrule settings from config file
+  ########################################
+
+  min_class_size      <- 10 
+  minCount            <- 0 
+  maxCount            <- -1
+  minFeature          <- 0 
+  maxFeature          <- -1 
+  
   ret                        <- process_config(min_class_size, 
                                                minCount, 
                                                maxCount, 

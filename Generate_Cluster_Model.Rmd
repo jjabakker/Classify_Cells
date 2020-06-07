@@ -167,6 +167,17 @@ maxCount            <- config_data["maxCount", "Value"]
 minFeature          <- config_data["minFeature", "Value"] 
 maxFeature          <- config_data["maxFeature", "Value"] 
 
+
+########################################
+# Overrule settings from config file
+########################################
+
+min_class_size      <- 10 
+minCount            <- 0 
+maxCount            <- -1
+minFeature          <- 0 
+maxFeature          <- -1 
+  
 ret                 <- process_config(min_class_size, 
                                       minCount, 
                                       maxCount, 
@@ -433,9 +444,16 @@ if (method == "svmLinear") {
                         mode = "everything",
                         dnn=c("Reference", "Predicted"))
   cm
-  svml_accuracy <- cm[["overall"]][["Accuracy"]]
-  svml_medianF1 <- median(cm[["byClass"]][,"F1"], na.rm = TRUE) 
   
+  
+  svml_accuracy <- cm[["overall"]][["Accuracy"]]
+  
+  if (class(cm[["byClass"]]) == "numeric") {
+    svml_medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+    } else {
+    svml_medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  }
+
   # Now save the models for later use
   save_cluster_model(path                = rdata_path, 
                      model_dataset_name  = dataset_name, 
@@ -483,8 +501,12 @@ if (method == "gbm") {
                                        dnn  =c("Reference", "Predicted"))
   cm
   gbm_accuracy      <- cm[["overall"]][["Accuracy"]]
-  gbm_medianF1      <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)    
   
+  if (class(cm[["byClass"]]) == "numeric") {
+    gbm_medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+  } else {
+    gbm_medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  }
   
   # Now save the models for later use
   save_cluster_model(path                = rdata_path, 
