@@ -244,7 +244,7 @@ tic(msg = "", quiet = TRUE)
 classification_category <- "Class"
 
 #---------------------------------------------------
-source("Code/Train/process_gbm_model_on_amb_data.R")
+source("Code/process_amb_data.R")
 #---------------------------------------------------
 
 model_info = list(
@@ -329,7 +329,7 @@ for (m in class_models_to_train) {
   labels                           <- labels_to_be_used[[m]]
   
   #---------------------------------------------------
-  source("Code/Train/process_gbm_model_on_amb_data.R")
+  source("Code/process_amb_data.R")
   #---------------------------------------------------
   
   model_info <- list(
@@ -441,7 +441,7 @@ for (m in gabaergic_subclass_list) {
   labels                   <- gabaergic_labels_list[[m]]
   
   #---------------------------------------------------
-  source("Code/Train/process_gbm_model_on_amb_data.R")
+  source("Code/process_amb_data.R")
   #---------------------------------------------------
   
   model_info = list(
@@ -561,7 +561,7 @@ for (m in glutamatergic_subclass_list) {
   labels                   <- glutamatergic_labels_list[[m]]
   
   #---------------------------------------------------
-  source("Code/Train/process_gbm_model_on_amb_data.R")
+  source("Code/process_amb_data.R")
   #---------------------------------------------------
   
   model_info = list(

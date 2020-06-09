@@ -51,6 +51,8 @@ library(ggraph)
 library(data.tree)
 library(DiagrammeR)
 
+source("Code/seurat_analysis.R")
+
 ```
 
 
@@ -458,7 +460,6 @@ if (SEURAT_VERBOSE) {
   cluster_resolution = 0.5
   
   #-------------------------------------
-  source("Code/Train/seurat_analysis.R")
   seurat_object <- run_seurat_analysis(seurat_object)
   #-------------------------------------
   
@@ -513,7 +514,7 @@ tic(msg = "", quiet = TRUE)
 classification_category <- "Class"
 
 #---------------------------------------------------
-source("Code/Train/process_gbm_model_on_amb_data.R")
+source("Code/process_amb_data.R")
 #---------------------------------------------------
 
 p1_class            <- p1
@@ -549,7 +550,7 @@ tic(msg = "", quiet = TRUE)
 classification_category <- "Subclass"
 
 #---------------------------------------------------
-source("Code/Train/process_gbm_model_on_amb_data.R")
+source("Code/process_amb_data.R")
 #---------------------------------------------------
 
 p1_subclass            <- p1
@@ -584,7 +585,7 @@ tic(msg = "", quiet = TRUE)
 classification_category <- "cluster"
 
 #---------------------------------------------------
-source("Code/Train/process_gbm_model_on_amb_data.R")
+source("Code/process_amb_data.R")
 #---------------------------------------------------
 
 p1_cluster            <- p1

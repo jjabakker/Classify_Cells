@@ -29,8 +29,7 @@ library(matrixStats)
 library(tictoc)                 # Used for timing of code
 library(MazamaCoreUtils)        # Used for logging messages to a file
 
-source("Code/Train/process_config.R")
-source("Code/Train/read_dataset.R")
+source("Code/process_config.R")
 source("Code/utilities.R")
 
 proj_path   <- file.path(".")
@@ -53,7 +52,7 @@ generate_dataset <- function (data_path, dataset_name) {
   print(dataset_name)
   
   # Set the data and model name and read the data
-  ret            <- read_dataset(data_path, dataset_name)
+  ret            <- read_csv_dataset(data_path, dataset_name)
   data           <- ret$data
   labels         <- ret$labels
   

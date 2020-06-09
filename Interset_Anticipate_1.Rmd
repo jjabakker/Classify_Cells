@@ -64,10 +64,10 @@ library(matrixStats)
 library(tictoc)
 library(MazamaCoreUtils)
 
-source("Code/Train/read_dataset.R")
-source("Code/Train/process_config.R")
-source("Code/Predict/predict_model_with_labels.R")
-source("Code/Predict/evaluate.R")
+source("Code/utilities.R")
+source("Code/process_config.R")
+source("Code/predict_model_with_labels.R")
+source("Code/evaluate.R")
 
 ```
 
@@ -131,7 +131,7 @@ for (row in 1:nrow(to_review)) {
   dataset_to_classify_name   <- as.character(to_review[row, "TestData"])
   
   # Read the model data
-  ret                        <- read_dataset(data_path, dataset_for_model_name)
+  ret                        <- read_csv_dataset(data_path, dataset_for_model_name)
   data_of_model              <- ret$data
   labels_of_model            <- ret$labels
   
@@ -200,7 +200,7 @@ for (row in 1:nrow(to_review)) {
   
   # Determine which genes are present in the target set
   # Read the data to classify
-  ret                       <- read_dataset(data_path, dataset_to_classify_name)
+  ret                       <- read_csv_dataset(data_path, dataset_to_classify_name)
   data_of_dataset           <- ret$data
   labels_of_dataset         <- ret$labels
   genes_in_data             <- colnames(data_of_dataset)

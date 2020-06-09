@@ -5,7 +5,7 @@ The script does some preprocessing, then trains a GBM model on AMB data and then
 '
 preproc_method <- "pca"
 
-source("Code/Predict/predict_model_with_labels.R")
+source("Code/predict_model_with_labels.R")
 
 labels$ident        <- labels[ , classification_category] 
 labels              <- select(labels, ident, everything())

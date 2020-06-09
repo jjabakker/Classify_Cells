@@ -1,0 +1,2 @@
+In this directory the clustered models will be stored.
+This file is here just to have git create the directory

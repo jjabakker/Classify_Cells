@@ -77,11 +77,11 @@ for (i in 1:length(data_sets)) {
   labels                 <- retd$labels
   
   ####################################################
-  # Normal model
+  # Variabity model
   ####################################################
   
-  # Read the normal model
-  retn                   <- load_single_model(rdata_path, dataset_name, "gbm", "pca")
+  # Read the variabity model
+  retn                   <- load_variability_model(rdata_path, dataset_name, "gbm", "pca")
   single_model           <- retn$model_information[["model"]]
   single_preproc_model   <- retn$model_information[["preproc_model"]]
   trainRowNumbers        <- retn$model_information[["preproc_model"]]
@@ -94,8 +94,7 @@ for (i in 1:length(data_sets)) {
   ldata                  <- cbind.data.frame(labels, ldata)
   ldata                  <- ldata %>% select(-one_of("cell_id"))
   trainRowNumbers        <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
-  
-  
+
   test_data              <- ldata[-trainRowNumbers,]
   
   # First preprocess
@@ -117,7 +116,7 @@ for (i in 1:length(data_sets)) {
     meanF1       <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE) 
   }
 
-  results_row            <- data.frame(Mode    = "Normal",
+  results_row            <- data.frame(Mode    = "Variability",
                                        Dataset = dataset_name,
                                        Median  = medianF1,
                                        Mean    = meanF1
@@ -129,7 +128,7 @@ for (i in 1:length(data_sets)) {
   # Cluster model
   ####################################################
   
-  # Read the cluster normal model
+  # Read the cluster model
   retc                   <- load_cluster_model(rdata_path, dataset_name, "gbm", "pca")
   cluster_model          <- retc$model_information[["model"]]
   cluster_preproc_model  <- retc$model_information[["preproc_model"]]

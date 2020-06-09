@@ -66,9 +66,8 @@ library(matrixStats)
 library(tictoc)                 # Used for timing of code
 library(MazamaCoreUtils)        # Used for logging messages to a file
 
-source("Code/Train/read_dataset.R")
-source("Code/Train/process_config.R")
-source("Code/Train/cluster_utility.R")
+source("Code/process_config.R")
+source("Code/cluster_utility.R")
 source("Code/utilities.R")
 
 ```
@@ -132,7 +131,7 @@ if (preproc_method == "pca")  {
 
 ```{r, read dataset}
 
-ret          <- read_dataset(data_path, dataset_name)
+ret          <- read_csv_dataset(data_path, dataset_name)
 data         <- ret$data
 labels       <- ret$labels
 

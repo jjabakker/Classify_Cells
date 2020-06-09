@@ -64,10 +64,10 @@ library(matrixStats)
 library(tictoc)
 library(MazamaCoreUtils)
 
-source("Code/Train/read_dataset.R")
-source("Code/Train/process_config.R")
-source("Code/Predict/predict_model_with_labels.R")
-source("Code/Predict/evaluate.R")
+source("Code/utilities.R")
+source("Code/process_config.R")
+source("Code/predict_model_with_labels.R")
+source("Code/evaluate.R")
 
 ```
 
@@ -98,8 +98,8 @@ config_path     <- file.path(proj_path, "config")
 # Logging and timer
 logger.setup (infoLog = file.path(log_path, paste0("advanced_interset.log")))
 
-report_out      <- data.frame()
-missing_cols    <- data.frame()
+gene_overlaps <- data.frame()
+report_out    <- data.frame()
 
 ```
 
@@ -126,14 +126,24 @@ if (preproc_method == "pca")  {
 
 for (row in 1:nrow(to_review)) {
 
-  # Set the data and model name 
+  # Set the data and model name
   dataset_for_model_name     <- as.character(to_review[row, "ModelData"])
   dataset_to_classify_name   <- as.character(to_review[row, "TestData"])
   
   # Read the model data
-  ret                        <- read_dataset(data_path, dataset_for_model_name)
+  ret                        <- read_csv_dataset(data_path, dataset_for_model_name)
   data_of_model              <- ret$data
   labels_of_model            <- ret$labels
+  genes_in_model             <- colnames(data_of_model)
+  
+  # Read the data to classify
+  ret                       <- read_csv_dataset(data_path, dataset_to_classify_name)
+  data_of_dataset           <- ret$data
+  labels_of_dataset         <- ret$labels
+  genes_in_data             <- colnames(data_of_dataset)
+  
+  genes_intersect           <- intersect(genes_in_data, genes_in_model)
+  data_of_model             <- data_of_model[ , genes_intersect]
   
   if (log_preprocess) {
     data_of_model <- log(1 + data_of_model)
@@ -159,7 +169,7 @@ for (row in 1:nrow(to_review)) {
   maxCount            <- -1
   minFeature          <- 0 
   maxFeature          <- -1 
-
+  
   ret                        <- process_config(min_class_size, 
                                                minCount, 
                                                maxCount, 
@@ -167,6 +177,7 @@ for (row in 1:nrow(to_review)) {
                                                maxFeature, 
                                                data_of_model, 
                                                labels_of_model)
+  
   data_of_model              <- ret$data
   labels_of_model            <- ret$labels
   
@@ -188,68 +199,45 @@ for (row in 1:nrow(to_review)) {
   top_genes                  <- VariableFeatures(seurat_object)
   cat(sprintf("Information on dataset after variable gene determination of dataset %s\n", dataset_for_model_name))
   cat(sprintf("Removed %d genes that apparently are not very variable \n\n", dim(data)[2] - length(top_genes) )) 
+  data_of_model = data_of_model[ , top_genes]
   cat(sprintf("\nThere are %d cells and %d features.\n", dim(data_of_model)[1], dim(data_of_model)[2]))
   for (i in 1:length(table(labels_of_model$ident))) {
     cat(sprintf("%-25s %d\n", names(table(labels_of_model$ident)[i]), table(labels_of_model$ident)[i]))
   }
   cat(sprintf("\n"))
   
+  # Set top_genes limit
+  top_genes                 <- top_genes[1:features_limit ]
   
-  ## Train the model for dataset with the top genes
+  ldata_of_model            <- as.data.frame(data_of_model[ , top_genes])
   
-  # Limit the dataset to the top genes 
-  ldata            <- as.data.frame(data_of_model[top_genes[1:features_limit]])
-  ldata            <- cbind.data.frame(labels_of_model, ldata)
-  ldata            <- ldata %>% select(-one_of("cell_id"))
+  # Add the column with classification
+  ldata_of_model            <- cbind.data.frame(labels_of_model, ldata_of_model)
+  ldata_of_model            <- ldata_of_model %>% select(-one_of("cell_id"))
   
-  # Preprocess for model
-  ppm              <- preProcess(ldata, 
-                                 method  = caret_preprocess_method,
-                                 thresh  = PCA_Threshold,
-                                 verbose = TRUE)
-  pp_train_data   <- predict(ppm, ldata)
+  # Preprocess the data for the model
+  train_data                <- ldata_of_model
+  ppm                       <- preProcess(train_data, 
+                                          method  = caret_preprocess_method,
+                                          thresh  = PCA_Threshold,
+                                          verbose = TRUE)
+  pp_train_data             <- predict(ppm, train_data)
   
   # Train the model
-  model           <- train(ident ~ ., 
-                           data      = pp_train_data, 
-                           method    = method,
-                           trControl = trainControl("cv", 
-                                                     number = 5, 
-                                                     classProbs = TRUE,
-                                                     verboseIter = TRUE)) 
+  model                     <- train(ident ~ ., 
+                                     data      = pp_train_data, 
+                                     method    = method,
+                                     trControl = trainControl("cv", 
+                                                       number = 5, 
+                                                       classProbs = TRUE,
+                                                       verboseIter = TRUE)) 
   
   # Predict and Evaluate against the dataset
-  
-  # Read the dataset
-  ret                        <- read_dataset(data_path, dataset_to_classify_name)
-  data_of_dataset            <- ret$data
-  labels_of_dataset          <- ret$labels
 
-
-  # Check if there are top genes missing in the dataset, and if so provide zero values
-  nr_missing_col <- 0
-  if (dataset_for_model_name != dataset_to_classify_name) {
-    missing_col <- setdiff(top_genes[1:features_limit], colnames(data_of_dataset))
-    newcol = rep.int(0,dim(data_of_dataset)[1])
-    if (length(missing_col) > 0) {
-      for (i in 1:length(missing_col)) {
-        data_of_dataset[ , missing_col[i]] = newcol
-      }
-      cat(sprintf("There were %s top %d features missing in the data dataset and added with zeros\n", length(missing_col), features_limit))
-    } else {
-      cat(sprintf("All top %d features were present in the data set.\n", features_limit))
-    }
-    nr_missing_col <- length(missing_col)
-  }
-
-  # record the missing genes 
-  missing_col  <- data.frame(ModelData = dataset_for_model_name, TestData = dataset_to_classify_name, Missing = nr_missing_col)
-  missing_cols <- rbind(missing_cols, missing_col)
-  
-  # Predict the data
   pp_data                  <- predict(ppm, data_of_dataset)
   predicted_classes        <- predict(model, pp_data)
   probability              <- predict(model, pp_data, type = "prob")
+
   ret                      <- evaluate(labels         = labels_of_dataset, 
                                        method         = method, 
                                        dataset_name   = dataset_to_classify_name, 
@@ -262,13 +250,11 @@ for (row in 1:nrow(to_review)) {
   print(report_out)
 }
 
-
 ```
-
 
 ```{r}
 
-save(report_out, file = file.path(rdata_path, "report_zero.Rdata"))
+save(report_out, file = file.path(rdata_path, "embryonic_advanced.rData"))
 
 ```
 
@@ -276,46 +262,33 @@ save(report_out, file = file.path(rdata_path, "report_zero.Rdata"))
 
 ```{r}
 report_out1 <- report_out %>% 
-  select(ModelData, TestData, medianF1) %>% 
-  arrange(ModelData)
+  select(ModelData, TestData, medianF1) %>%
+  rename("Model" = ModelData ) %>%
+  arrange(Model)
 
-report <- inner_join(report_out1, missing_cols) %>%
-  rename("Model" = ModelData )  %>%
-  mutate(Genes = features_limit - Missing) %>%
-  select(-Missing)
-
-report$Mode = "Zero"
-
-report
+report_out1$Genes <- 1000
+report_out1$Mode  <- "Anticipate 2"
+report            <- report_out1
 
 ```
 
+```{r}
+
+ggplot(report, aes(x =  TestData, y = medianF1)) +
+  geom_bar(stat="identity", width = 0.6 ) +
+  scale_y_continuous(limits = c(0, 1)) + 
+  facet_grid(Model ~ .) +
+  theme_light()
+
+```
 
 
 
 ```{r}
-
-# To generate the picture you need to pick up the data from Embryonic_Method1_Interset_Anticipate.Rmd and Embryonic_Method2_Interset_Anticipate.Rmd
-
-load(file.path(rdata_path, "report_anticipate_1.Rdata"))
-combined_report       <- rbind(report, report_anticipate_1)
-
-load(file.path(rdata_path, "report_anticipate_2.Rdata"))
-combined_report       <- rbind(combined_report, report_anticipate_2)
-
-combined_report$Mode <- factor(combined_report$Mode, levels = c("Zero", "Anticipate 1", "Anticipate 2"))
-
-combined_report$Genes <- as.factor(combined_report$Genes)
-ggplot(combined_report, aes(x = Model, y = medianF1, col = TestData, size = Genes)) +
-  geom_point() +
-  scale_y_continuous(limits = c(0, 1.05)) + 
-  facet_wrap( ~ Mode) +
-  theme_light() +
-  labs(y = "Median F1") +  
-  labs(x = "Model")
+report_anticipate_2 = report
+save(report_anticipate_2, file = file.path(rdata_path, "report_anticipate_2.Rdata"))
 ```
 
 
 
 
- 

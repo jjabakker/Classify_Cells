@@ -1,0 +1,176 @@
+---
+title: "Classify Datasets and Models"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+```
+
+
+
+```{r}
+library(tidyverse)
+to_review <- tribble(
+  ~Model,                    ~Data,            ~Method     ,~Preproc,     
+  
+  "Xin",                    "Xin",             "gbm",       "pca",  
+  "Muraro",                 "Muraro",          "gbm",       "pca",  
+  "Baron_Human",            "Baron_Human",     "gbm",       "pca",  
+  "Baron_Mouse",            "Baron_Mouse",     "gbm",       "pca",  
+  "SegerStolpe",            "SegerStolpe",     "gbm",       "pca",  
+  "Zhou",                   "Zhou",            "gbm",       "pca",
+  "Bo",                     "Bo",              "gbm",       "pca",   
+  "Petropoulos1",           "Petropoulos1",    "gbm",       "pca" 
+)
+
+
+```
+
+
+
+```{r}
+
+library(readr)
+library(tibble)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(Seurat)
+library(caret)
+library(data.table)
+library(matrixStats)
+library(tictoc)                 # Used for timing of code
+library(MazamaCoreUtils)        # Used for logging messages to a file
+source("./Code/utilities.R")
+source("./Code/evaluate.R")
+source("./Code/predict_model_with_labels.R")
+
+```
+
+
+```{r, initialise}
+
+proj_path   <- file.path(".")
+data_path   <- file.path(proj_path, "DataSets")
+log_path    <- file.path(proj_path, "Logs")
+rdata_path  <- file.path(proj_path, "rData")
+config_path <- file.path(proj_path, "config")
+
+
+results_table   <- data.frame()
+coherence_table <- data.frame()
+report_out      <- data.frame()
+class_summaries <- data.frame()
+
+```
+
+
+
+
+
+```{r, Process}
+
+
+  
+for (i in 1:nrow(to_review)) {
+  
+  dataset_name   <- to_review[i,"Data"]
+  model_name     <- to_review[i, "Model"]
+  preproc_method <- to_review[i, "Preproc"]
+  method         <- to_review[i, "Method"]
+ 
+  cat("\n\n\n") 
+  cat("-------------------------------------------------------------------------------------------------------\n")
+  cat(sprintf("Dataset '%s' with model '%s' with preproc method '%s' with method '%s'\n", dataset_name, model_name, preproc_method, method))
+  cat("-------------------------------------------------------------------------------------------------------\n\n\n")
+  
+  ####################################################
+  # Read the data
+  ####################################################
+  
+  retd                   <- load_single_data(rdata_path, dataset_name)
+  data                   <- retd$data
+  labels                 <- retd$labels
+  
+  ####################################################
+  # Normal model
+  ####################################################
+  
+  # Read the normal model
+  retn                   <- load_variability_model(rdata_path, model_name, method, preproc_method)
+  model                  <- retn$model_information[["model"]]
+  preproc_model          <- retn$model_information[["preproc_model"]]
+  trainRowNumbers        <- retn$model_information[["preproc_model"]]
+  top_genes              <- retn$model_information[["top_genes"]]
+  features_limit         <- retn$model_information[["features_limit"]]
+  
+  # Limit the data set to the number of genes specified in 'features_limit' (1000 has been found to be a good choice)
+  top_genes              <- top_genes[1:features_limit]
+  ldata                  <- as.data.frame(data[top_genes])
+  ldata                  <- cbind.data.frame(labels, ldata)
+  ldata                  <- ldata %>% select(-one_of("cell_id"))
+  trainRowNumbers        <- createDataPartition(ldata$ident, p = 0.8, list = FALSE)
+  
+  
+  test_data              <- ldata[-trainRowNumbers,]
+  
+  # First preprocess
+  pp_data                <- predict(preproc_model, test_data)
+
+  # Then predict
+  predicted_classes      <- predict(model, pp_data)
+  probability            <- predict(model, pp_data, type = "prob")
+
+  cm                     <- confusionMatrix(predicted_classes,
+                                            test_data$ident,
+                                            mode = "everything",
+                                            dnn  = c("Predicted", "Reference"))
+
+  if (class(cm[["byClass"]]) == "numeric") {
+    medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]]["F1"], na.rm = TRUE)
+  } else {
+    medianF1     <- median(cm[["byClass"]][,"F1"], na.rm = TRUE)
+    meanF1       <- mean(cm[["byClass"]][,"F1"], na.rm = TRUE)
+  }
+
+
+  results_row            <- data.frame(Dataset        = dataset_name,
+                                       Model          = model_name,
+                                       Method         = method,
+                                       preproc_method = preproc_method,
+                                       Median         = medianF1,
+                                       Mean           = meanF1
+                                       )
+  results_table          <- rbind(results_table, results_row)
+  print(cm)
+}
+
+
+```
+
+
+```{r}
+
+results_table <- results_table %>%
+  mutate (Label = str_c(Data, "-", Model, "-", Method, "-", Preproc))
+          
+ggplot(results_table, aes(x = Label, y = Median)) +
+  geom_point() +
+  scale_y_continuous(limits = c(0, 1.05)) + 
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 45, hjust  = 1)) +
+  labs(y = "Median F1") +  
+  labs(x = "Dataset - Model - Method - Preproc")
+```
+
+
+
+
+
+

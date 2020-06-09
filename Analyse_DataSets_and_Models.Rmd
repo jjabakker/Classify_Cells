@@ -28,7 +28,7 @@ library(tictoc)                 # Used for timing of code
 library(MazamaCoreUtils)        # Used for logging messages to a file
 
 source("./Code/utilities.R")
-source("./Code/Train/read_dataset.R")
+source("./Code/Train/read_csv_dataset.R")
 source("./Code/Train/process_config.R")
 
 
@@ -76,7 +76,7 @@ for (dataset_name in data_sets) {
   cat(sprintf("\n\n\nProcessing %s\n\n", dataset_name))
 
   # Set the data and model name and read the data
-  ret                <- read_dataset(data_path, dataset_name)
+  ret                <- read_csv_dataset(data_path, dataset_name)
   data               <- ret$data
   labels             <- ret$labels
   
@@ -126,7 +126,7 @@ dataset_name <- "AMB"
 cat(sprintf("\n\n\nProcessing %s\n\n", dataset_name))
 
 # Set the data and model name and read the data
-ret                <- read_dataset(data_path, dataset_name)
+ret                <- read_csv_dataset(data_path, dataset_name)
 data               <- ret$data
 labels             <- ret$labels
 
@@ -260,8 +260,8 @@ if (READ_FRESH) {
     class_freq[ii]  <- list(table(labels$ident))
     
     # To read in the top_genes, you can use any of the models for that dataset, svnLinear and pca is a good combination, but any will do
-    ret <- load_single_model(rdata_path, dataset_name, "svmLinear", "pca")
-    top_genes[ii]      <- list(ret$model_information[["top_genes"]])
+    ret             <- load_variability_model(rdata_path, dataset_name, "svmLinear", "pca")
+    top_genes[ii]   <- list(ret$model_information[["top_genes"]])
   }
   
   names(class_names) <- data_sets

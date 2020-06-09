@@ -5,9 +5,8 @@ calc_coherence <- function(seurat_object) {
   nr_of_clusters     <- length(levels(seurat_object@active.ident[1]))
   cluster_table      <- data.frame()
   weighted_coherence <- 0
-  
   for (i in 0:(nr_of_clusters - 1)) {
-    cluster  <- table(labels[WhichCells(seurat_object, idents = i),"ident"]) %>% 
+    cluster  <- table(labels[WhichCells(seurat_object, idents = i), "ident"]) %>% 
       as.data.frame() %>%
       column_to_rownames(var = "Var1") %>%
       t() %>%
@@ -20,6 +19,7 @@ calc_coherence <- function(seurat_object) {
     cluster$Coherence     <- mc/sc
     cluster$Count         <- sc
     cluster               <- select(cluster, "Class", "Cluster", "Coherence", "Count", everything())
+    cluster               <- select(cluster, "Class", "Cluster", "Coherence", "Count")
     cluster_table         <- rbind(cluster_table, cluster)
     weighted_coherence    <- weighted_coherence + cluster$Coherence * cluster$Count
   }

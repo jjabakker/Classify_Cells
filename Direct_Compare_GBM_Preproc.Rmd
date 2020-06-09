@@ -63,9 +63,9 @@ library(matrixStats)
 library(tictoc)
 library(MazamaCoreUtils)        # Used for logging messages to a file
 
-source("Code/Train/process_config.R")
-source("Code/Train/read_dataset.R")
-source("Code/Predict/predict_model_with_labels.R")
+source("Code/process_config.R")
+source("Code/utilities.R")
+source("Code/predict_model_with_labels.R")
 
 ```
 
@@ -107,12 +107,13 @@ logger.setup (infoLog = file.path(log_path, paste0("pp_compare.log")))
 
 ```{r, Read and config}
 
-ret                 <- read_dataset(data_path, dataset_name)
+ret                 <- read_csv_dataset(data_path, dataset_name)
 data                <- ret$data
 labels              <- ret$labels
 
 config_data         <- read_config(config_path  = config_path,
                                    dataset_name = dataset_name)
+config_data         <- ret$config_data
   
 min_class_size      <- config_data["min_class_size", "Value"]
 cluster_resolution  <- config_data["cluster_resolution", "Value"] 
@@ -130,6 +131,8 @@ minCount            <- 0
 maxCount            <- -1
 minFeature          <- 0 
 maxFeature          <- -1 
+
+process_config <- function (min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
 
 ret                 <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
 data                <- ret$data
@@ -192,7 +195,7 @@ Here starts the actual training and prediction processing
 model_gbm               <- NULL
 gbm_accuracy            <- 0
 log_preprocess          <- FALSE
-caret_preprocess_method <- c('scale', 'center', 'pca')
+preproc_method       <- c('scale', 'center', 'pca')
   
 if (TRAIN_GBM_PP_PCA) {
   
@@ -215,7 +218,7 @@ if (TRAIN_GBM_PP_PCA) {
   
 
   preproc_model   <- preProcess(train_data, 
-                                method  = caret_preprocess_method,
+                                method  = preproc_method,
                                 thresh  = PCA_Threshold,
                                 verbose = TRUE)
  
@@ -268,7 +271,7 @@ if (TRAIN_GBM_PP_PCA) {
 model_gbm               <- NULL
 gbm_accuracy            <- 0
 log_preprocess          <- FALSE
-caret_preprocess_method <- c('scale', 'center')
+preproc_method       <- c('scale', 'center')
   
 if (TRAIN_GBM_PP_NO_PCA) {
   
@@ -290,7 +293,7 @@ if (TRAIN_GBM_PP_NO_PCA) {
   test_data             <- ldata[-trainRowNumbers,]
  
   preproc_model         <- preProcess(train_data, 
-                                      method  = caret_preprocess_method,
+                                      method  = preproc_method,
                                       thresh  = PCA_Threshold,
                                       verbose = TRUE)
   
@@ -345,7 +348,7 @@ if (TRAIN_GBM_PP_NO_PCA) {
 model_gbm               <- NULL
 gbm_accuracy            <- 0
 log_preprocess          <- TRUE
-caret_preprocess_method <- c('scale', 'center', 'pca')
+preproc_method       <- c('scale', 'center', 'pca')
   
 if (TRAIN_GBM_PP_LOG) {
   
@@ -368,7 +371,7 @@ if (TRAIN_GBM_PP_LOG) {
   test_data          <- ldata[-trainRowNumbers,]
   
   preproc_model      <- preProcess(train_data, 
-                                   method  = caret_preprocess_method,
+                                   method  = preproc_method,
                                    thresh  = PCA_Threshold,
                                    verbose = TRUE)
   

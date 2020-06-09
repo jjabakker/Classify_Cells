@@ -52,11 +52,22 @@ Petropoulos1 # 1,529 cells, 26,178 genes
 
 # Select dataset
 
-dataset_name     <- "Baron_Human"
+dataset_name     <- "Zhou"
 
-SVML      <- FALSE
-SVMR      <- FALSE
+SVML_PCA      <- FALSE
+SVMR_PCA      <- FALSE
+RF_PCA        <- FALSE
+GBM_PCA       <- TRUE
 
+SVML_NOPCA    <- FALSE
+SVMR_NOPCA    <- FALSE
+RF_NOPCA      <- FALSE
+GBM_NOPCA     <- FALSE
+
+SVML_LOGPCA   <- FALSE
+SVMR_LOGPCA   <- FALSE
+RF_LOGPCA     <- FALSE
+GBM_LOGPCA    <- FALSE
 ```
 
 
@@ -77,9 +88,8 @@ library(matrixStats)
 library(tictoc)
 library(MazamaCoreUtils)
 
-source("Code/Train/read_dataset.R")
-source("Code/Train/process_config.R")
-source("Code/Predict/predict_model_with_labels.r")
+source("Code/process_config.R")
+source("Code/predict_model_with_labels.r")
 source("Code/utilities.R")
 
 ```
@@ -120,7 +130,7 @@ tic.clearlog()
 
 ```{r, Read}
 
-ret                 <- read_dataset(data_path, dataset_name)
+ret                 <- read_csv_dataset(data_path, dataset_name)
 data                <- ret$data
 labels              <- ret$labels
 
@@ -316,15 +326,15 @@ train_and_test <- function (dataset_name,
               dataset_name, preproc_method,method, medianF1))
   
   # Now save the models for later use
-  save_single_model(path                = rdata_path, 
-                    model_dataset_name  = dataset_name, 
-                    learning_method     = method, 
-                    preproc_method      = preproc_method,
-                    model               = model,
-                    preproc_model       = preproc_model,
-                    top_genes           = top_genes,
-                    features_limit      = features_limit,
-                    trainRowNumbers     = trainRowNumbers)
+  save_variability_model(path                = rdata_path, 
+                         model_dataset_name  = dataset_name, 
+                         learning_method     = method, 
+                         preproc_method      = preproc_method,
+                         model               = model,
+                         preproc_model       = preproc_model,
+                         top_genes           = top_genes,
+                         features_limit      = features_limit,
+                         trainRowNumbers     = trainRowNumbers)
 
   
   toc(log=TRUE, quiet = TRUE)
@@ -346,7 +356,7 @@ train_and_test <- function (dataset_name,
 
 ```{r, fig.width = 5}
 
-if (SVML) {
+if (SVML_PCA) {
   meth <- "svmLinear"
   ppm  <- "pca"
   ret  <- train_and_test (dataset_name   = dataset_name,
@@ -377,7 +387,7 @@ if (SVML) {
 
 ```{r, fig.width = 5}
 
-if (SVMR) {
+if (SVMR_PCA) {
   meth <- "svmRadial"
   ppm  <- "pca"
   ret  <- train_and_test (dataset_name   = dataset_name,
@@ -410,30 +420,31 @@ if (SVMR) {
 
 ```{r, fig.width = 5}
 
-meth <- "rf"
-ppm  <- "pca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit = features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
-
+if (RF_PCA) {
+  meth <- "rf"
+  ppm  <- "pca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit = features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+}
 ```
 
 
@@ -441,29 +452,31 @@ save_report_data (report_out       = report_row,
 
 ```{r, fig.width = 5}
 
-meth <- "gbm"
-ppm  <- "pca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit = features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+if (GBM_PCA) {
+  meth <- "gbm"
+  ppm  <- "pca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit = features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+}
 
 ```
 
@@ -473,29 +486,31 @@ save_report_data (report_out       = report_row,
 
 ```{r, fig.width = 5}
 
-meth <- "svmLinear"
-ppm  <- "nopca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit = features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+if (SVML_NOPCA) {
+  meth <- "svmLinear"
+  ppm  <- "nopca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit = features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+}
 
 ```
 
@@ -503,29 +518,31 @@ save_report_data (report_out       = report_row,
 
 ```{r, fig.width = 5}
 
-meth <- "svmRadial"
-ppm  <- "nopca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit = features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+if (SVMR_NOPCA) {
+  meth <- "svmRadial"
+  ppm  <- "nopca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit = features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+}
 
 ```
 
@@ -533,60 +550,64 @@ save_report_data (report_out       = report_row,
 
 ```{r, fig.width = 5}
 
-meth <- "rf"
-ppm  <- "nopca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit = features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
-
+if (RF_NOPCA) {
+  meth <- "rf"
+  ppm  <- "nopca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit = features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+}
+  
 ```
 
 ### GBM
 
 ```{r, fig.width = 5}
 
-meth <- "gbm"
-ppm  <- "nopca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit =features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
-
+if (GBM_NOPCA) {
+  meth <- "gbm"
+  ppm  <- "nopca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit =features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  
+}
 
 ```
 
@@ -596,29 +617,31 @@ save_report_data (report_out       = report_row,
 
 ```{r, fig.width = 5}
 
-meth <- "svmLinear"
-ppm  <- "logpca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit = features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+if (SVML_LOGPCA) {
+  meth <- "svmLinear"
+  ppm  <- "logpca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit = features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+}
 
 ```
 
@@ -626,29 +649,31 @@ save_report_data (report_out       = report_row,
 
 ```{r, fig.width = 5}
 
-meth <- "svmRadial"
-ppm  <- "logpca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit = features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+if (SVMR_LOGPCA) {
+  meth <- "svmRadial"
+  ppm  <- "logpca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit = features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+}
 
 ```
 
@@ -656,61 +681,64 @@ save_report_data (report_out       = report_row,
 
 ```{r, fig.width = 5}
 
-meth <- "rf"
-ppm  <- "logpca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit = features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
-
-
+if (RF_LOGPCA) {
+  meth <- "rf"
+  ppm  <- "logpca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit = features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  
+}
 ```
 
 ### GBM
 
 ```{r, fig.width = 5}
 
-meth <- "gbm"
-ppm  <- "logpca"
-ret  <- train_and_test (dataset_name   = dataset_name,
-                        data           = saved_data,
-                        labels         = saved_labels, 
-                        method         = meth, 
-                        preproc_method = ppm,
-                        top_genes      = top_genes, 
-                        features_limit = features_limit)
-
-medianF1_table[meth, ppm] <- ret$medianF1
-duration_table[meth, ppm] <- ret$duration
-medianF1_table
-
-report_row <- data.frame(Method    = meth,
-                         ModelName = dataset_name,
-                         PreProc   = ppm,
-                         MedianF1  = ret$medianF1,
-                         duration  = ret$duration)
-
-save_report_data (report_out       = report_row,
-                  path             = rdata_path,
-                  file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
-
+if (GBM_LOGPCA) {
+  meth <- "gbm"
+  ppm  <- "logpca"
+  ret  <- train_and_test (dataset_name   = dataset_name,
+                          data           = saved_data,
+                          labels         = saved_labels, 
+                          method         = meth, 
+                          preproc_method = ppm,
+                          top_genes      = top_genes, 
+                          features_limit = features_limit)
+  
+  medianF1_table[meth, ppm] <- ret$medianF1
+  duration_table[meth, ppm] <- ret$duration
+  medianF1_table
+  
+  report_row <- data.frame(Method    = meth,
+                           ModelName = dataset_name,
+                           PreProc   = ppm,
+                           MedianF1  = ret$medianF1,
+                           duration  = ret$duration)
+  
+  save_report_data (report_out       = report_row,
+                    path             = rdata_path,
+                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  
+}
 
 ```
 
