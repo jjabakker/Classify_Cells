@@ -18,14 +18,25 @@ set.seed(1234)
 # Specify key use parameters
 
 Model options:
-Baron_Mouse  # 1,886 cells, 14,861 genes
-Baron_Human  # 8,569 cells, 17,499 genes
-Muraro       # 2,122 cells, 18,915 genes
-SegerStolpe  # 2,133 cells, 22,757 genes
-Xin          # 1,449 cells, 33,889 genes
-Zhou         # 2,554 cells, 19,046 genes
-Bo           # 516   cells, 56,924 genes
-Petropoulos1 # 1,529 cells, 26,178 genes
+  Baron_Mouse  # 1,886 cells, 14,861 genes
+  Baron_Human  # 8,569 cells, 17,499 genes
+  Muraro       # 2,122 cells, 18,915 genes
+  SegerStolpe  # 2,133 cells, 22,757 genes
+  Xin          # 1,449 cells, 33,889 genes
+  Zhou         # 2,554 cells, 19,046 genes
+  Bo           # 516   cells, 56,924 genes
+  Petropoulos1 # 1,529 cells, 26,178 genes
+
+Method options:
+  svml
+  svmr
+  rf
+  gbm
+
+Preproc options:
+  pca
+  nopca
+  logpca
 
 
 ```{r}
@@ -39,7 +50,7 @@ preproc_method <- "pca"
 
 # Specify which model to run
 
-method        <- "gbm"
+method         <- "gbm"
 
 ```
 

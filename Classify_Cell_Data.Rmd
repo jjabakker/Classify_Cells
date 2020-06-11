@@ -18,6 +18,7 @@ to_review <- tribble(
   ~Model,                    ~Data,            ~Method     ,~Preproc,     
   
   "Xin",                    "Xin",             "gbm",       "pca",  
+  "Xin",                    "Xin",             "svml",      "pca",  
   "Muraro",                 "Muraro",          "gbm",       "pca",  
   "Baron_Human",            "Baron_Human",     "gbm",       "pca",  
   "Baron_Mouse",            "Baron_Mouse",     "gbm",       "pca",  

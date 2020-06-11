@@ -66,7 +66,7 @@ generate_dataset <- function (data_path, dataset_name) {
   maxCount       <- config_data["maxCount", "Value"]
   minFeature     <- config_data["minFeature", "Value"] 
   maxFeature     <- config_data["maxFeature", "Value"] 
-  
+
 
   ########################################
   # Overrule settings from config file
@@ -78,20 +78,11 @@ generate_dataset <- function (data_path, dataset_name) {
   minFeature          <- 0 
   maxFeature          <- -1   
 
-  ret            <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
-  data           <- ret$data
-  labels         <- ret$labels
+  ret                 <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
+  data                <- ret$data
+  labels              <- ret$labels
   
   save_single_data (rdata_path, dataset_name, data, labels) 
-  
-  # data_information = list(
-  #   data            = data,
-  #   labels          = labels,
-  #   dataset_name    = dataset_name
-  # )
-  # 
-  # save(data_information,
-  #      file = file.path(rdata_path, "SingleData", paste0(dataset_name, "_dataset.rData")))
 }
 
 ```

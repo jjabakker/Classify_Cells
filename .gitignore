@@ -54,3 +54,5 @@ Logs/pp_no_pca_all_classify.txt
 gsm*.Rmd
 
 *.pdf
+
+Import_Data/*

@@ -96,12 +96,12 @@ for (dataset_name in data_sets) {
   minFeature          <- 0 
   maxFeature          <- -1   
 
-  ret              <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
-  data             <- ret$data
-  labels           <- ret$labels
+  ret                 <- process_config(min_class_size, minCount, maxCount, minFeature, maxFeature, data, labels)
+  data                <- ret$data
+  labels              <- ret$labels
   
-  dim_corrected    <- dim(data)
-  class_corrected  <- table(labels$ident)
+  dim_corrected       <- dim(data)
+  class_corrected     <- table(labels$ident)
 
   print(dim_corrected)
   print(class_corrected)
