@@ -290,12 +290,13 @@ ggplot(results, aes( x = as.factor(top_genes), y = medianF1)) +
 ```
 
 
-```{r}
+```{r, fig.width = 5}
 ggplot(results, aes( x = as.factor(top_genes), y = medianF1)) +
   geom_dotplot(binaxis='y', 
                stackdir='center', 
-               dotsize = 2, 
-               fill="red") +
+               dotsize = 4, 
+               fill="red",
+               colour = "red") +
   scale_y_continuous(limits = c(0, 1)) + 
   facet_grid(dataset_name ~ .) +
   theme_light() +
@@ -310,5 +311,4 @@ ggplot(results, aes( x = as.factor(top_genes), y = medianF1)) +
 save(results, file = file.path(rdata_path, "compare_top_genes.rData"))
 
 ```
-
 

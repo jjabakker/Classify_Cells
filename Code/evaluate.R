@@ -48,16 +48,18 @@ evaluate <- function(labels, method, dataset_name, model_name, features_limit, p
   
   acinar_overall = mean(Predicted[Predicted$PredictedClass == "acinar","Max"])
   
-  class_summary <- data.frame(
-    average_prob = numeric(),
-    prob_correct = numeric(),
-    prob_incorrect = numeric(),
-    prob_reliable = numeric(),
-    prob_unreliable = numeric(),
-    nr_correct = numeric(),
-    nr_incorrect = numeric(),
-    nr_reliabe = numeric(),
-    nr_unreliabe = numeric())
+  # class_summary <- data.frame(
+  #   average_prob = numeric(),
+  #   prob_correct = numeric(),
+  #   prob_incorrect = numeric(),
+  #   prob_reliable = numeric(),
+  #   prob_unreliable = numeric(),
+  #   nr_correct = numeric(),
+  #   nr_incorrect = numeric(),
+  #   nr_reliabe = numeric(),
+  #   nr_unreliabe = numeric())
+  
+  class_summary <- data.frame()
   
   for (class in colnames(probability)) {
     new_rec = data.frame(
@@ -136,8 +138,8 @@ evaluate <- function(labels, method, dataset_name, model_name, features_limit, p
     theme_light() +
     theme(axis.text.x = element_text(angle = 45, hjust  = 1)) 
   
-  title_string <- sprintf("Dataset '%s' predicted with model data '%s', using method '%s' (%d features, PCA threshold of %2.1f)", 
-                          dataset_name, model_name, method, features_limit, PCA_Threshold)
+  title_string <- sprintf("Dataset '%s' predicted with model data '%s', using method '%s' (%d features)", 
+                          dataset_name, model_name, method, features_limit)
   grid.arrange(p1, p2, ncol=2, top = title_string)
   
   

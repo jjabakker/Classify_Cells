@@ -843,7 +843,7 @@ head(x = Idents(seurat_object), 8)
 
 xy                   <- as.data.frame(seurat_object@reductions[["umap"]]@cell.embeddings)
 class                <- as.data.frame(seurat_object@meta.data[["ident"]])
-colnames(class)[1]   <- "Class"
+colnames(class)[1]   <- "Origin"
 cluster              <- as.data.frame(seurat_object@meta.data[["seurat_clusters"]])
 colnames(cluster)[1] <- "Cluster"
 plot_data            <- cbind(xy, class, cluster)
@@ -863,7 +863,7 @@ for (i in 0:(nr_of_clusters - 1)) {
   p1              <- p1 + annotate("text", x = cluster_center[1], y = cluster_center[2], label= i)
 }
 
-p2 <- ggplot(plot_data, aes(x = UMAP_1, y = UMAP_2, col = Class)) +
+p2 <- ggplot(plot_data, aes(x = UMAP_1, y = UMAP_2, col = Origin)) +
   geom_point(size = 0.3) +
   theme_light()
 title_string <- sprintf("Seurat-generated cluster for embryonic datsets with a weighted coherence of %3.1f%%", ret$weighted_coherence * 100)

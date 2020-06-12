@@ -52,15 +52,15 @@ Petropoulos1 # 1,529 cells, 26,178 genes
 
 # Select dataset
 
-dataset_name     <- "Zhou"
+dataset_name     <- "Baron_Human"
 
 SVML_PCA      <- FALSE
 SVMR_PCA      <- FALSE
 RF_PCA        <- FALSE
-GBM_PCA       <- TRUE
+GBM_PCA       <- FALSE
 
-SVML_NOPCA    <- FALSE
-SVMR_NOPCA    <- FALSE
+SVML_NOPCA    <- TRUE
+SVMR_NOPCA    <- TRUE
 RF_NOPCA      <- FALSE
 GBM_NOPCA     <- FALSE
 
@@ -303,7 +303,7 @@ train_and_test <- function (dataset_name,
   report_out        <- ret$report_out
   predicted_classes <- ret$predicted_classes
   class_summary     <- ret$class_summary
-  duration          <- ret$duration
+  confidence        <- report_out$Confidence
 
   cm                <- confusionMatrix(test_data[,1],
                                        predicted_classes,
@@ -326,9 +326,18 @@ train_and_test <- function (dataset_name,
               dataset_name, preproc_method,method, medianF1))
   
   # Now save the models for later use
+  if (method == "svmLinear") {
+    short_method = "svml"
+  }
+  else if (method == "svmRadial") {
+    short_method = "svmr"
+  }
+  else {
+    short_method = method
+  }
   save_variability_model(path                = rdata_path, 
                          model_dataset_name  = dataset_name, 
-                         learning_method     = method, 
+                         learning_method     = short_method, 
                          preproc_method      = preproc_method,
                          model               = model,
                          preproc_model       = preproc_model,
@@ -342,8 +351,9 @@ train_and_test <- function (dataset_name,
   duration         <- as.numeric(str_split(duration_str, " ")[[1]][2])
   tic.clearlog()
   
-  return( list(medianF1 = medianF1,
-               duration = duration))
+  return( list(medianF1   = medianF1,
+               duration   = duration,
+               confidence = confidence))
 }
 
 ```
@@ -371,15 +381,16 @@ if (SVML_PCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
 }
 ```
 
@@ -402,15 +413,16 @@ if (SVMR_PCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
 }
 
 ```
@@ -435,15 +447,16 @@ if (RF_PCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
 }
 ```
 
@@ -467,15 +480,16 @@ if (GBM_PCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
 }
 
 ```
@@ -501,15 +515,16 @@ if (SVML_NOPCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
 }
 
 ```
@@ -533,15 +548,16 @@ if (SVMR_NOPCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
 }
 
 ```
@@ -565,15 +581,16 @@ if (RF_NOPCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
 }
   
 ```
@@ -597,15 +614,16 @@ if (GBM_NOPCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
   
 }
 
@@ -632,15 +650,16 @@ if (SVML_LOGPCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
 }
 
 ```
@@ -664,15 +683,16 @@ if (SVMR_LOGPCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
 }
 
 ```
@@ -696,15 +716,16 @@ if (RF_LOGPCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
   
 }
 ```
@@ -728,15 +749,16 @@ if (GBM_LOGPCA) {
   duration_table[meth, ppm] <- ret$duration
   medianF1_table
   
-  report_row <- data.frame(Method    = meth,
-                           ModelName = dataset_name,
-                           PreProc   = ppm,
-                           MedianF1  = ret$medianF1,
-                           duration  = ret$duration)
+  report_row <- data.frame(Method     = meth,
+                           ModelName  = dataset_name,
+                           PreProc    = ppm,
+                           MedianF1   = ret$medianF1,
+                           duration   = ret$duration,
+                           confidence = ret$confidence)
   
-  save_report_data (report_out       = report_row,
-                    path             = rdata_path,
-                    file_name        = paste0(dataset_name, "_", meth, "_", ppm ))
+  save_report_data (report_out        = report_row,
+                    path              = rdata_path,
+                    file_name         = paste0(dataset_name, "_", meth, "_", ppm ))
   
 }
 
