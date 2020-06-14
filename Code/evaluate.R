@@ -48,17 +48,6 @@ evaluate <- function(labels, method, dataset_name, model_name, features_limit, p
   
   acinar_overall = mean(Predicted[Predicted$PredictedClass == "acinar","Max"])
   
-  # class_summary <- data.frame(
-  #   average_prob = numeric(),
-  #   prob_correct = numeric(),
-  #   prob_incorrect = numeric(),
-  #   prob_reliable = numeric(),
-  #   prob_unreliable = numeric(),
-  #   nr_correct = numeric(),
-  #   nr_incorrect = numeric(),
-  #   nr_reliabe = numeric(),
-  #   nr_unreliabe = numeric())
-  
   class_summary <- data.frame()
   
   for (class in colnames(probability)) {
@@ -150,26 +139,15 @@ evaluate <- function(labels, method, dataset_name, model_name, features_limit, p
   
   # Before calling confusionMatrix add missing classes to make sure bot Predicted and Regference have the same classes 
   
-  levelsP  <- levels(Predicted$PredictedClass)
-  levelsR  <- levels(Predicted$ReferenceClass)
-  add_to_R <- setdiff(levelsP, levelsR)
-  add_to_P <- setdiff(levelsR, levelsP)
-  
-  levels(Predicted$PredictedClass) <- c(levels(Predicted$PredictedClass), add_to_P)
-  levels(Predicted$ReferenceClass) <- c(levels(Predicted$ReferenceClass), add_to_R)
-  
-  cm <- confusionMatrix(Predicted$PredictedClass,
-                        Predicted$ReferenceClass,
-                        mode = "everything",
-                        dnn = c("Predicted", "Reference"))
-  
+  cm           <- GetConfusionMatrix(Predicted$PredictedClass,
+                                     Predicted$ReferenceClass)
+                                     
   cat(sprintf("\n\n\n\n"))
   cat(sprintf("*************************************************************************************************************\n"))
   cat(sprintf("Confusion Matrix for %s, model %s, and dataset %s\n", method, model_name, dataset_name))
   cat(sprintf("*************************************************************************************************************\n\n"))
   print(cm)
-  
-  
+
   
   ######################################################################################################################
   # Fill the report-out table

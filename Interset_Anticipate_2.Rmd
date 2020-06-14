@@ -12,8 +12,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 
-rm(list = ls())
-set.seed(1234)
+rm(list = ls())    # Remove all variables
+cat("\014")        # Clear the console
+set.seed(1234)     # For random repeatability
 
 ```
 
@@ -64,11 +65,12 @@ library(matrixStats)
 library(tictoc)
 library(MazamaCoreUtils)
 
-source("Code/utilities.R")
-source("Code/process_config.R")
-source("Code/predict_model_with_labels.R")
-source("Code/evaluate.R")
-
+source("./Code/utilities.R")
+source("./Code/process_config.R")
+source("./Code/predict_model_with_labels.R")
+source("./Code/evaluate.R")
+source("./Code/get_confusion_matrix.R")
+       
 ```
 
 
@@ -252,12 +254,12 @@ for (row in 1:nrow(to_review)) {
 
 ```
 
+
 ```{r}
 
 save(report_out, file = file.path(rdata_path, "embryonic_advanced.rData"))
 
 ```
-
 
 
 ```{r}
@@ -272,6 +274,7 @@ report            <- report_out1
 
 ```
 
+
 ```{r}
 
 ggplot(report, aes(x =  TestData, y = medianF1)) +
@@ -283,10 +286,11 @@ ggplot(report, aes(x =  TestData, y = medianF1)) +
 ```
 
 
-
 ```{r}
+
 report_anticipate_2 = report
 save(report_anticipate_2, file = file.path(rdata_path, "report_anticipate_2.Rdata"))
+
 ```
 
 

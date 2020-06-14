@@ -102,11 +102,10 @@ class_summary     <- ret$predicted_classes
 predicted_classes <- ret$predicted_classes
 p1                <- ret$p1
 p2                <- ret$p2
-
-cm                <- confusionMatrix(test_data[,1],
-                                     predicted_classes,
-                                     mode = "everything",
-                                     dnn = c("Reference", "Predicted"))
+                      
+cm               <- GetConfusionMatrix(test_data[,1],
+                                       predicted_classes)
+                                       
 accuracy         <- cm[["overall"]][["Accuracy"]]
 
 

@@ -8,9 +8,13 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+
 ```{r}
-rm(list = ls())
-set.seed(1234)
+
+rm(list = ls())    # Remove all variables
+cat("\014")        # Clear the console
+set.seed(1234)     # For random repeatability
+
 ```
 
 
@@ -30,8 +34,9 @@ library(matrixStats)
 library(tictoc)                 # Used for timing of code
 library(MazamaCoreUtils)        # Used for logging messages to a file
 
-source("Code/utilities.R")
-source("Code/cluster_utility.R")
+source("./Code/utilities.R")
+source("./Code/cluster_utility.R")
+source("./Code/get_confusion_matrix.R")
 
 
 ```
@@ -44,15 +49,6 @@ PCA_Threshold  <- 0.90          # The percentage variance explained by the PCA
 
 features_limit <- 2000          # The number of features that will be considered during the PCA
                                 # A high number uses the richness of the data set optimally, but makes processing slow
-
-# Note:
-#   TRAIN_GBM_NP does not seem to have much advantage over TRAIN_GBM
-#   TRAIN_GLMNET seems to bring the computer to its knees, especially wgen wroting the results. 
-#   Better to run Direct_Compare_Models where nothing is written 
-
-
-TRAIN_RF       <- TRUE
-TRAIN_GBM      <- TRUE
 
 SAVE           <- TRUE
 
@@ -204,7 +200,11 @@ if (SAVE) {
 
 
 ```{r}
+
+if (FALSE) {
   load(file.path(data_path, paste0("embryonic_data_and_labels_1.rData")))
+}
+
 ```
 
 
@@ -442,7 +442,6 @@ if (SAVE) {
 # This is a restart point where you can load previously saved results 
 
 if (FALSE) {
-  
   load(file <- file.path(rdata_path, paste0("embryonic_data_and_labels_2.rData")))
   labels    <- data_information[["labels"]]
   data      <- data_information[["data"]]
@@ -601,11 +600,10 @@ toc(log=TRUE, quiet = TRUE)
 logger.info("Info: Finished training gbm with combined dataset %s.", tic.log()[[1]])
 tic.clearlog()
 
-cm <- confusionMatrix(pp_test_data[ , 1],
-                    predicted_classes,
-                    mode = "everything",
-                    dnn=c("Reference", "Predicted"))
+cm               <- GetConfusionMatrix(pp_test_data[,1],
+                                       predicted_classes)
 cm
+
 gbm_accuracy <- cm[["overall"]][["Accuracy"]]
 
 ```

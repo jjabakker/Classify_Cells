@@ -10,11 +10,18 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+```{r}
+
+rm(list = ls())    # Remove all variables
+cat("\014")        # Clear the console
+set.seed(1234)     # For random repeatability
+
+```
+
+
 # Initialise
 
 ```{r, libraries, message=FALSE}
-
-rm(list = ls())
 
 library(readr)
 library(tibble)

@@ -12,7 +12,14 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 
-rm(list = ls())
+rm(list = ls())    # Remove all variables
+cat("\014")        # Clear the console
+set.seed(1234)     # For random repeatability
+
+```
+
+
+```{r}
 
 library(tidyverse)
 library(readr)
@@ -28,8 +35,8 @@ library(tictoc)                 # Used for timing of code
 library(MazamaCoreUtils)        # Used for logging messages to a file
 
 source("./Code/utilities.R")
-source("./Code/Train/read_csv_dataset.R")
-source("./Code/Train/process_config.R")
+source("./Code/utilities.R")
+source("./Code/process_config.R")
 
 
 ```
@@ -112,7 +119,7 @@ for (dataset_name in data_sets) {
                        Cells_Cor   = dim_corrected[1],
                        Genes_Cor   = dim_corrected[2],
                        Classes_Cor = length (class_corrected))
-  rownames(ds_row)[1] <- datset_name
+  rownames(ds_row)[1] <- dataset_name
   ds_table            <- rbind(ds_table, ds_row)
   print(ds_table)
 }
@@ -120,6 +127,7 @@ for (dataset_name in data_sets) {
 ds_table
 
 ```
+
 
 ```{r}
 dataset_name <- "AMB"
@@ -235,10 +243,7 @@ print(ds_table)
 ```
 
 
-
-
-
-It is not necessary to read in the data again, but just to avoidinconsistency. The above was done becaise we needed bith umporcesses and processed. For the remainder in the file you need only processed.  
+It is not necessary to read in the data again, but just to avoid inconsistency. The above was done because we needed both unprocessed. and processed. For the remainder in the file you need only processed.  
 
 
 ```{r, read data}
@@ -344,7 +349,6 @@ nr_shared_genes
 
 ```
 
-
 # How many genes are there in total?
 
 ```{r, total genes}
@@ -359,7 +363,6 @@ nr_total_genes <- length(total_genes)
 nr_total_genes
 
 ```
-
 
 # Do the top genes appear in all data sets?
 
@@ -394,26 +397,6 @@ for (i in 6:8) {
   cat(sprintf("\n"))
 }
 
-```
-
-
-
-# Are the top_genes very different in the various datasets?
-
-```{r, topgenes in datasets}
-# size_of_top_genes <- 1000
-# 
-# cat(sprintf("Analysis of occurance of the top %d genes used in the model in the various data sets.\n\n", size_of_top_genes))
-# 
-# for (i in 1:length(data_sets)) {
-#   for (j in 1:length(data_sets)) {
-#     overlap <- length(intersect(top_genes[[i]][1:size_of_top_genes],
-#                                 top_genes[[j]][1:size_of_top_genes]))
-#     cat(sprintf("The overlap of the %d top genes in model %-12s with the top genes in dataset %-12s is %d\n", 
-#                 size_of_top_genes, data_sets[i], data_sets[j], overlap))
-#   }
-#   cat("\n")
-# }
 ```
 
 

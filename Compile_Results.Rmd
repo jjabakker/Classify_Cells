@@ -7,6 +7,15 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+```{r}
+
+rm(list = ls())    # Remove all variables
+cat("\014")        # Clear the console
+set.seed(1234)     # For random repeatability
+
+```
+
 # Initialise
 
 ```{r, libraries, message=FALSE}
@@ -47,13 +56,12 @@ config_path     <- file.path(proj_path, "config")
 report_table     <- data.frame()
 files_to_process <- list.files(file.path(rdata_path, "ReportData"))
 print(files_to_process)
+cat("\n\n")
 
 for (file in files_to_process)  {
   print(file)
-  #if (grepl("Human", file) != TRUE) {
-    load (file.path(rdata_path, "ReportData", file))
-    report_table <- rbind(report_table, report_out)
-  #}
+  load (file.path(rdata_path, "ReportData", file))
+  report_table <- rbind(report_table, report_out)
 }
 
 ```

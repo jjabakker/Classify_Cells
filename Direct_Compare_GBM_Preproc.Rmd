@@ -63,9 +63,10 @@ library(matrixStats)
 library(tictoc)
 library(MazamaCoreUtils)        # Used for logging messages to a file
 
-source("Code/process_config.R")
-source("Code/utilities.R")
-source("Code/predict_model_with_labels.R")
+source("./Code/process_config.R")
+source("./Code/utilities.R")
+source("./Code/predict_model_with_labels.R")
+source("./Code/get_confusion_matrix.R")
 
 ```
 

@@ -31,7 +31,7 @@ Petropoulos1 # 1,529 cells, 26,178 genes
 ```{r}
 
 # Specify  which model to analyse
-dataset_name   <- "Baron_Human"
+dataset_name   <- "Muraro"
 
 # Select preprocessing
 
@@ -41,10 +41,7 @@ preproc_method <- "pca"
 # Note that it possible that a model is not available in the modelset, in which case the instruction is simply ignored
 
 TRAIN_SVML     <- FALSE
-TRAIN_SVMR     <- FALSE
-TRAIN_RF       <- FALSE
 TRAIN_GBM      <- TRUE
-TRAIN_GLMNET   <- FALSE
 
 ```
 
@@ -66,9 +63,10 @@ library(matrixStats)
 library(tictoc)                 # Used for timing of code
 library(MazamaCoreUtils)        # Used for logging messages to a file
 
-source("Code/process_config.R")
-source("Code/cluster_utility.R")
-source("Code/utilities.R")
+source("./Code/process_config.R")
+source("./Code/cluster_utility.R")
+source("./Code/utilities.R")
+source("./Code/get_confusion_matrix.R")
 
 ```
 
@@ -393,7 +391,7 @@ if (FALSE) {
 
 ```{r, eliminate_nzv}
 
-# This test is still necessary, because you splitting into train and test sets may have caused
+# This test is still necessary, because splitting into train and test sets may have caused
 # zero genes in the train set
 
 ngenes     <- dim(train_data)[2]
@@ -461,12 +459,10 @@ if (TRAIN_SVML) {
   plot(varImp(model_svmLinear), main="Variable Importance")
   
   predicted_classes <- predict(model_svmLinear, pp_test_data[,-1])
-  
-  cm <- confusionMatrix(pp_test_data[,1],
-                        predicted_classes,
-                        mode = "everything",
-                        dnn=c("Reference", "Predicted"))
+                          
+  cm            <- GetConfusionMatrix(pp_test_data[,1], predicted_classes) 
   cm
+
   svml_accuracy <- cm[["overall"]][["Accuracy"]]
   
   if (class(cm[["byClass"]]) == "numeric") {
@@ -510,13 +506,12 @@ if (TRAIN_GBM) {
   # This plot does not work for gbm
   # plot(varImp(model_gbm), main="Variable Importance")
   
-  predicted_classes <- predict(model_gbm, pp_test_data[,-1])
-  cm                <- confusionMatrix(pp_test_data[,1],
-                                       predicted_classes,
-                                       mode = "everything",
-                                       dnn=c("Reference", "Predicted"))
+  predicted_classes  <- predict(model_gbm, pp_test_data[,-1])
+
+
+  cm                 <- GetConfusionMatrix(pp_test_data[,1], predicted_classes)                                        
   cm
-  gbm_accuracy      <- cm[["overall"]][["Accuracy"]]
+  gbm_accuracy       <- cm[["overall"]][["Accuracy"]]
   
   if (class(cm[["byClass"]]) == "numeric") {
     gbm_medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
@@ -535,93 +530,8 @@ if (TRAIN_GBM) {
 
 
 
-# Save the models, data and the configuration file
-
-```{r, save_models }
-
-if (SAVE) {
-  save_csv <- config_data["minCount", "Value"]           != minCount ||
-              config_data["maxCount", "Value"]           != maxCount ||
-              config_data["minFeature", "Value"]         != minFeature ||
-              config_data["maxFeature", "Value"]         != maxFeature ||
-              config_data["min_class_size", "Value"]     != min_class_size ||
-              config_data["cluster_resolution", "Value"] != cluster_resolution 
-
-  if (save_csv) {
-    config_data["min_class_size", "Value"]     <- min_class_size
-    config_data["cluster_resolution", "Value"] <- cluster_resolution
-    config_data["minCount", "Value"]           <- minCount
-    config_data["maxCount", "Value"]           <- maxCount
-    config_data["minFeature", "Value"]         <- minFeature
-    config_data["maxFeature", "Value"]         <- maxFeature
-    write.csv(config_data,
-              file.path(config_path, paste0(dataset_name, "_config.csv")),
-              row.names = TRUE)
-  }
-  
-  model_information = list(
-    seurat_object      = seurat_object,
-    top_genes          = top_genes,
-    config_data        = config_data,
-    preproc_model      = preproc_model,
-    model_rf           = model_rf,
-    model_gbm          = model_gbm,
-    model_svmRadial    = model_svmRadial,
-    model_svmLinear    = model_svmLinear,
-    model_glmnet       = model_glmnet,
-    dataset_name       = dataset_name,
-    PCA_Threshold      = PCA_Threshold,
-    features_limit     = features_limit,
-    cluster_resolution = cluster_resolution
-    )
-    
-  # Now save the models for later use
-
-  save(model_information, 
-       file = file.path(rdata_path, "ClusteredModels", paste0(dataset_name, "_c_models_", preproc_method, ".rData")))
-}
-
-```
 
 
-```{r}
-
-logger.info("")
-logger.info("Summary: Model created with dataset %s", dataset_name)
-logger.info("")
-
-logger.info("   Config Parameters")  
-logger.info("      min_class_size     : %d",    min_class_size)
-logger.info("      cluster_resolution : %2.1f", cluster_resolution)
-logger.info("      minCount           : %d",    minCount)
-logger.info("      maxCount           : %d",    maxCount)
-logger.info("      minFeature         : %d",    minFeature)
-logger.info("      maxFeature         : %d",    maxFeature)
-logger.info("")
-
-logger.info("   Preprocess")  
-logger.info("      Method             : %s", preproc_method)
-logger.info("")
-
-logger.info("   Train Parameters")  
-logger.info("      PCA Threshold      : %2.1f", PCA_Threshold)
-logger.info("      Features used      : %d",    features_limit)
-logger.info("      PCA dimensions     : %d",    dim(pp_train_data)[2])
-logger.info("")
-
-logger.info("   Accuracy")
-logger.info("      Accuracy of Random Forest is     : %3.1f%%", rf_accuracy * 100)
-logger.info("      Accuracy of GBM is               : %3.1f%%", gbm_accuracy * 100)
-logger.info("      Accuracy of SVM Radial is        : %3.1f%%", svmr_accuracy * 100)
-logger.info("      Accuracy of SVM Linear is        : %3.1f%%", svml_accuracy * 100)
-logger.info("      Accuracy of GLMNET is            : %3.1f%%", glmnet_accuracy * 100)
-logger.info("")
-logger.info("      Median F1 of Random Forest is    : %3.1f%%", rf_medianF1 * 100)
-logger.info("      Median F1 of GBM is              : %3.1f%%", gbm_medianF1 * 100)
-logger.info("      Median F1 of SVM Radial is       : %3.1f%%", svmr_medianF1 * 100)
-logger.info("      Median F1 of SVM Linear is       : %3.1f%%", svml_medianF1 * 100)
-logger.info("      Median F1 of GLMNET is           : %3.1f%%", glmnet_medianF1 * 100)
-```
 
 
 

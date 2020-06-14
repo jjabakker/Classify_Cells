@@ -64,10 +64,11 @@ library(matrixStats)
 library(tictoc)
 library(MazamaCoreUtils)
 
-source("Code/utilities.R")
-source("Code/process_config.R")
-source("Code/predict_model_with_labels.R")
-source("Code/evaluate.R")
+source("./Code/utilities.R")
+source("./Code/process_config.R")
+source("./Code/predict_model_with_labels.R")
+source("./Code/evaluate.R")
+source("./Code/get_confusion_matrix.R")
 
 ```
 
@@ -288,7 +289,6 @@ report$Mode = "Zero"
 report
 
 ```
-
 
 
 ```{r}

@@ -51,7 +51,7 @@ library(ggraph)
 library(data.tree)
 library(DiagrammeR)
 
-source("Code/seurat_analysis.R")
+source("./Code/get_confusion_matrix.R")
 
 ```
 
@@ -525,7 +525,7 @@ class_summary_class <- class_summary
 
 # Save
 file_name <- file.path(rdata_path, "amb_level_class.rData")
-save(cm, p1, p2, Predicted, class_summary, accuracy, medianF1, file = file_name)
+save(cm, p1, p2, Predicted_class, class_summary, accuracy, medianF1, file = file_name)
 
 # Report timer
 toc(log = TRUE, quiet = TRUE)
@@ -575,33 +575,35 @@ print (medianF1)
 
 ```{r, cluster Selection}
 
-data      <- save_data 
-labels    <- save_labels 
-
-# Start timer
-logger.info("Info: Started cluster level")
-tic(msg = "", quiet = TRUE)
-
-classification_category <- "cluster"
-
-#---------------------------------------------------
-source("Code/process_amb_data.R")
-#---------------------------------------------------
-
-p1_cluster            <- p1
-p2_cluster            <- p2
-cm_cluster            <- cm
-Predicted_cluster     <- Predicted
-class_summary_cluster <- class_summary
-
-# Save
-file_name <- file.path(rdata_path, "amb_level_cluster.rData")
-save(cm, p1, p2, Predicted, class_summary, file = file_name)
-
-# Report timer
-toc(log = TRUE, quiet = TRUE)
-logger.info("Info: Ended cluster level%s", tic.log()[[1]])
-tic.clearlog()
+if (FALSE) {
+  data      <- save_data 
+  labels    <- save_labels 
+  
+  # Start timer
+  logger.info("Info: Started cluster level")
+  tic(msg = "", quiet = TRUE)
+  
+  classification_category <- "cluster"
+  
+  #---------------------------------------------------
+  source("Code/process_amb_data.R")
+  #---------------------------------------------------
+  
+  p1_cluster            <- p1
+  p2_cluster            <- p2
+  cm_cluster            <- cm
+  Predicted_cluster     <- Predicted
+  class_summary_cluster <- class_summary
+  
+  # Save
+  file_name <- file.path(rdata_path, "amb_level_cluster.rData")
+  save(cm, p1, p2, Predicted, class_summary, file = file_name)
+  
+  # Report timer
+  toc(log = TRUE, quiet = TRUE)
+  logger.info("Info: Ended cluster level%s", tic.log()[[1]])
+  tic.clearlog()
+}
 
 ```
 

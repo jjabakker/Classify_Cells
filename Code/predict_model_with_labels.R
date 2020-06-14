@@ -9,6 +9,7 @@ Preprocessing still needs to be done on the data
 ######################################################################################################################
 '
 
+source("./Code/get_confusion_matrix.R")
 
 predict_model_with_labels <- function(method,               # machine learning method
                                       preproc_method,       # preprocessing method
@@ -175,15 +176,8 @@ predict_model_with_labels <- function(method,               # machine learning m
   # Get the confusion matrix
   ######################################################################################################################
   
-  # comb_levels <- union(levels(Predicted$PredicteClass), levels(Predicted$ReferenceClass))
-  # levels(Predicted$PredictedClass) <- comb_levels
-  # levels(Predicted$ReferenceClass) <- comb_levels
-  
-  cm <- confusionMatrix(Predicted$PredictedClass,
-                        Predicted$ReferenceClass,
-                        mode = "everything",
-                        dnn = c("Predicted", "Reference"))
-  
+  cm           <- GetConfusionMatrix(Predicted$PredictedClass,
+                                     Predicted$ReferenceClass)
   cat(sprintf("\n\n\n\n"))
   cat(sprintf("*************************************************************************************************************\n"))
   cat(sprintf("Confusion Matrix for %s, model %s, and dataset %s\n", method, model_name, dataset_name))

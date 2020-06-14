@@ -26,7 +26,9 @@ library(data.table)
 library(matrixStats)
 library(tictoc)                 # Used for timing of code
 library(MazamaCoreUtils)        # Used for logging messages to a file
+
 source("./Code/utilities.R")
+source("./Code/get_confusion_matrix.R")
 
 ```
 
@@ -58,7 +60,6 @@ coherence_table <- data.frame()
 ```
 
 
-
 ```{r, Process}
 
 
@@ -70,7 +71,7 @@ for (i in 1:length(data_sets)) {
   
   ####################################################
   # Read the data
-  ####################################################
+  ###################################################
   
   retd                   <- load_single_data(rdata_path, dataset_name)
   data                   <- retd$data
@@ -103,11 +104,9 @@ for (i in 1:length(data_sets)) {
   # Then predict
   predicted_classes      <- predict(single_model, pp_data)
   
-  cm                     <- confusionMatrix(predicted_classes,
-                                            test_data$ident,
-                                            mode = "everything",
-                                            dnn  = c("Predicted", "Reference"))
-  
+  cm                     <- GetConfusionMatrix(predicted_classes,
+                                              test_data$ident) 
+                                               
   if (class(cm[["byClass"]]) == "numeric") {
     medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
     meanF1       <- mean(cm[["byClass"]]["F1"], na.rm = TRUE) 
@@ -150,11 +149,9 @@ for (i in 1:length(data_sets)) {
   # Then predict
   predicted_classes      <- predict(cluster_model, pp_data)
   
-  cm                     <- confusionMatrix(predicted_classes,
-                                            test_data$ident,
-                                            mode = "everything",
-                                            dnn  = c("Predicted", "Reference"))
-  
+  cm                      <- GetConfusionMatrix(predicted_classes,
+                                                test_data$ident)                                             
+                                            
   if (class(cm[["byClass"]]) == "numeric") {
     medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
     meanF1       <- mean(cm[["byClass"]]["F1"], na.rm = TRUE) 
@@ -190,7 +187,6 @@ ggplot(results_table, aes(x = Dataset, y = Median)) +
   labs(y = "Median F1") +  
   labs(x = "Model")
 ```
-
 
 
 ```{r, fig.width = 5}

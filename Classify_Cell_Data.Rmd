@@ -7,9 +7,17 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-rm(list = ls())
 ```
 
+
+
+```{r}
+
+rm(list = ls())    # Remove all variables
+cat("\014")        # Clear the console
+set.seed(1234)     # For random repeatability
+
+```
 
 
 ```{r}
@@ -18,11 +26,10 @@ to_review_special <- tribble(
   ~Model,                    ~Data,            ~Method     ,~Preproc,     
   
   "Xin",                    "Xin",             "gbm",       "pca",  
-  "Xin",                    "Xin",             "svml",      "pca",  
   "Muraro",                 "Muraro",          "gbm",       "pca",  
   "Baron_Human",            "Baron_Human",     "gbm",       "pca",  
   "Baron_Mouse",            "Baron_Mouse",     "gbm",       "pca",  
-  "Baron_Mouse",            "Baron_Mouse",     "svml",      "pca",  
+  "Baron_Mouse",            "Baron_Mouse",     "svmLinear", "pca",  
   "SegerStolpe",            "SegerStolpe",     "gbm",       "pca",  
   "Zhou",                   "Zhou",            "gbm",       "pca",
   "Bo",                     "Bo",              "gbm",       "pca", 
@@ -32,20 +39,20 @@ to_review_special <- tribble(
 to_review_baron_human <- tribble(
   ~Model,                    ~Data,            ~Method     ,~Preproc,     
   
-  "Baron_Human",            "Baron_Human",     "svml",       "pca", 
-  "Baron_Human",            "Baron_Human",     "svmr",       "pca",  
-  "Baron_Human",            "Baron_Human",     "rf",         "pca",  
-  "Baron_Human",            "Baron_Human",     "gbm",        "pca",  
+  "Baron_Human",            "Baron_Human",     "svmLinear", "pca", 
+  "Baron_Human",            "Baron_Human",     "svmRadial", "pca",  
+  "Baron_Human",            "Baron_Human",     "rf",        "pca",  
+  "Baron_Human",            "Baron_Human",     "gbm",       "pca",  
 
-  "Baron_Human",            "Baron_Human",     "svml",       "nopca", 
-  "Baron_Human",            "Baron_Human",     "svmr",       "nopca",  
-  "Baron_Human",            "Baron_Human",     "rf",         "nopca",  
-  "Baron_Human",            "Baron_Human",     "gbm",        "nopca",  
+  "Baron_Human",            "Baron_Human",     "svmLinear", "nopca", 
+  "Baron_Human",            "Baron_Human",     "svmRadial", "nopca",  
+  "Baron_Human",            "Baron_Human",     "rf",        "nopca",  
+  #"Baron_Human",            "Baron_Human",     "gbm",       "nopca",  
   
-  "Baron_Human",            "Baron_Human",     "svml",       "logpca", 
-  "Baron_Human",            "Baron_Human",     "svmr",       "logpca",  
-  "Baron_Human",            "Baron_Human",     "rf",         "logpca"
- # "Baron_Human",            "Baron_Human",     "gbm",        "logpca",  
+  "Baron_Human",            "Baron_Human",     "svmLinear", "logpca", 
+  "Baron_Human",            "Baron_Human",     "svmRadial", "logpca",  
+  "Baron_Human",            "Baron_Human",     "rf",        "logpca"
+ # "Baron_Human",            "Baron_Human",     "gbm",      "logpca",  
   
 )
 
@@ -53,26 +60,35 @@ to_review_baron_human <- tribble(
 to_review_muraro <- tribble(
   ~Model,                    ~Data,            ~Method     ,~Preproc,     
   
-  "Muraro",            "Muraro",     "svml",       "pca", 
-  "Muraro",            "Muraro",     "svmr",       "pca",  
-  "Muraro",            "Muraro",     "rf",         "pca",  
-  "Muraro",            "Muraro",     "gbm",        "pca",  
+  "Muraro",                  "Muraro",      "svmLinear",   "pca", 
+  "Muraro",                   "Muraro",     "svmRadial",  "pca",  
+  "Muraro",                   "Muraro",     "rf",         "pca",  
+  "Muraro",                   "Muraro",     "gbm",        "pca",  
 
-  "Muraro",            "Muraro",     "svml",       "nopca", 
-  "Muraro",            "Muraro",     "svmr",       "nopca",  
-  "Muraro",            "Muraro",     "rf",         "nopca",  
-  "Muraro",            "Muraro",     "gbm",        "nopca",  
+  "Muraro",                   "Muraro",     "svmLinear",  "nopca", 
+  "Muraro",                   "Muraro",     "svmRadial",  "nopca",  
+  "Muraro",                   "Muraro",     "rf",         "nopca",  
+  "Muraro",                   "Muraro",     "gbm",        "nopca",  
   
-  "Muraro",            "Muraro",     "svml",       "logpca", 
-  "Muraro",            "Muraro",     "svmr",       "logpca",  
-  "Muraro",            "Muraro",     "rf",         "logpca",  
-  "Muraro",            "Muraro",     "gbm",        "logpca",  
+  "Muraro",                   "Muraro",     "svmLinear",  "logpca", 
+  "Muraro",                   "Muraro",     "svmRadial",  "logpca",  
+  "Muraro",                   "Muraro",     "rf",         "logpca",  
+  "Muraro",                   "Muraro",     "gbm",        "logpca",  
   
 )
 
-to_review <- to_review_special
+
+to_review_bo <- tribble(
+  ~Model,                    ~Data,            ~Method     ,~Preproc,     
+  
+  "Bo",                  "Bo",            "gbm",      "pca"
+  
+)
+
 to_review <- to_review_muraro
 to_review <- to_review_baron_human
+to_review <- to_review_bo
+to_review <- to_review_special
 
 ```
 
@@ -178,15 +194,8 @@ for (i in 1:nrow(to_review)) {
   predicted_classes      <- predict(model, pp_data)
   probability            <- predict(model, pp_data, type = "prob")
   
-  
-  # cm                     <- confusionMatrix(predicted_classes,
-  #                                           test_data$ident,
-  #                                           mode = "everything",
-  #                                           dnn  = c("Predicted", "Reference"))
-  
   cm                     <- GetConfusionMatrix(predicted_classes,
                                                test_data$ident)
-  
   
   evaluate(test_labels, method, dataset_name, model_name, features_limit, probability, report_out) 
 

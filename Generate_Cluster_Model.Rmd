@@ -28,9 +28,7 @@ Model options:
   Petropoulos1 # 1,529 cells, 26,178 genes
 
 Method options:
-  svml
-  svmr
-  rf
+  svmLinear
   gbm
 
 Preproc options:
@@ -45,11 +43,9 @@ Preproc options:
 dataset_name   <- "Muraro"
 
 # Select preprocessing
-
 preproc_method <- "pca"
 
 # Specify which model to run
-
 method         <- "gbm"
 
 ```
@@ -72,9 +68,11 @@ library(matrixStats)
 library(tictoc)                 # Used for timing of code
 library(MazamaCoreUtils)        # Used for logging messages to a file
 
-source("Code/process_config.R")
-source("Code/cluster_utility.R")
-source("Code/utilities.R")
+source("./Code/process_config.R")
+source("./Code/cluster_utility.R")
+source("./Code/utilities.R")
+source("./Code/get_confusion_matrix.R")
+
 
 ```
 
@@ -332,7 +330,6 @@ save(marker_list, file = file.path(rdata_path, paste0(dataset_name, "_marker_lis
 ```
 
 
-
 ## Combine marker genes into top_genes
 
 ```{r}
@@ -352,7 +349,6 @@ for (i in 2 : nr_of_clusters) {
 # Caret processing
 
 Here starts the actual training and prediction processing 
-
 
 ```{r}
 
@@ -427,7 +423,7 @@ tic.clearlog()
 ### Support Vector Machine Linear
 
 
-```{r, model_svmLinear}
+```{r, svmLinear}
 
 model_svmLinear <- NULL
 svml_accuracy   <- 0
@@ -449,12 +445,8 @@ if (method == "svmLinear") {
   
   predicted_classes <- predict(model_svmLinear, pp_test_data[,-1])
   
-  cm <- confusionMatrix(pp_test_data[,1],
-                        predicted_classes,
-                        mode = "everything",
-                        dnn=c("Reference", "Predicted"))
+  cm   <- GetConfusionMatrix(pp_test_data[,1], predicted_classes)                         
   cm
-  
   
   svml_accuracy <- cm[["overall"]][["Accuracy"]]
   
@@ -485,7 +477,7 @@ if (method == "svmLinear") {
 
 ### Gradient Boost Machine
 
-```{r, model_gbm}
+```{r, gbm}
 
 model_gbm    <- NULL
 gbm_accuracy <- 0
@@ -505,11 +497,10 @@ if (method == "gbm") {
   print(model$finalModel)
   
   predicted_classes <- predict(model, pp_test_data[,-1])
-  cm                <- confusionMatrix(pp_test_data[,1],
-                                       predicted_classes,
-                                       mode = "everything",
-                                       dnn  =c("Reference", "Predicted"))
+
+  cm   <- GetConfusionMatrix(pp_test_data[,1], predicted_classes) 
   cm
+
   gbm_accuracy      <- cm[["overall"]][["Accuracy"]]
   
   if (class(cm[["byClass"]]) == "numeric") {

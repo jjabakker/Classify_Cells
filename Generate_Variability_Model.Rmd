@@ -59,10 +59,10 @@ SVMR_PCA      <- FALSE
 RF_PCA        <- FALSE
 GBM_PCA       <- FALSE
 
-SVML_NOPCA    <- TRUE
-SVMR_NOPCA    <- TRUE
-RF_NOPCA      <- FALSE
-GBM_NOPCA     <- FALSE
+SVML_NOPCA    <- FALSE
+SVMR_NOPCA    <- FALSE
+RF_NOPCA      <- TRUE
+GBM_NOPCA     <- TRUE
 
 SVML_LOGPCA   <- FALSE
 SVMR_LOGPCA   <- FALSE
@@ -88,9 +88,10 @@ library(matrixStats)
 library(tictoc)
 library(MazamaCoreUtils)
 
-source("Code/process_config.R")
-source("Code/predict_model_with_labels.r")
-source("Code/utilities.R")
+source("./Code/process_config.R")
+source("./Code/predict_model_with_labels.r")
+source("./Code/utilities.R")
+source("./Code/get_confusion_matrix.R")
 
 ```
 
@@ -305,10 +306,7 @@ train_and_test <- function (dataset_name,
   class_summary     <- ret$class_summary
   confidence        <- report_out$Confidence
 
-  cm                <- confusionMatrix(test_data[,1],
-                                       predicted_classes,
-                                       mode = "everything",
-                                       dnn  = c("Reference", "Predicted"))
+  cm                <- GetConfusionMatrix(test_data[,1], predicted_classes)                                        
   print(cm)
   
   accuracy          <- cm[["overall"]][["Accuracy"]]
@@ -325,19 +323,9 @@ train_and_test <- function (dataset_name,
   cat(sprintf("\nThe medianF1 for dataset %s, preprocessing %s, method %s is: %3.2f\n", 
               dataset_name, preproc_method,method, medianF1))
   
-  # Now save the models for later use
-  if (method == "svmLinear") {
-    short_method = "svml"
-  }
-  else if (method == "svmRadial") {
-    short_method = "svmr"
-  }
-  else {
-    short_method = method
-  }
   save_variability_model(path                = rdata_path, 
                          model_dataset_name  = dataset_name, 
-                         learning_method     = short_method, 
+                         learning_method     = method, 
                          preproc_method      = preproc_method,
                          model               = model,
                          preproc_model       = preproc_model,

@@ -11,8 +11,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r}
-rm(list = ls())
-set.seed(1234)
+
+rm(list = ls())    # Remove all variables
+cat("\014")        # Clear the console
+set.seed(1234)     # For random repeatability
+
 ```
 
 
@@ -47,6 +50,8 @@ library(ggraph)
 library(data.tree)
 library(DiagrammeR)
 
+source("./Code/get_confusion_matrix.R")
+
 ```
 
 
@@ -78,8 +83,6 @@ log_path         <- file.path(proj_path, "Logs")
 rdata_path       <- file.path(proj_path, "rData")
 config_path      <- file.path(proj_path, "config")
 
-dataset_filename <- paste0(dataset_name, "_ambxxxx")
-
 logger.setup (infoLog = file.path(log_path, "amb.log"))
 
 amb_list         <- list()
@@ -109,8 +112,9 @@ if (preproc_method == "pca")  {
 
 # Get previously stored data back
 
-load(file.path(rdata_path, "amb_list.Rdata"))
-
+if (FALSE) {
+  load(file.path(rdata_path, "amb_list.Rdata"))
+}
 ```
 
 
@@ -123,9 +127,9 @@ logger.info("Info: Started reading data from dataset %s", dataset_name)
 tic(msg = "", quiet = TRUE)
 
 
-dataset_filename <- paste0(dataset_name, "_hierarchical")
+#dataset_filename <- paste0(dataset_name, "_hierarchical")
 
-READ_FRESH <- FALSE
+READ_FRESH <- TRUE
 
 if (READ_FRESH) {
   # Read the data and labels and format names
@@ -292,12 +296,10 @@ glutamatergic_labels <- labels[which(predicted_classes == "Glutamatergic"),]
 nonneuronal_data     <- data[which(predicted_classes   == "Non.Neuronal"),]
 nonneuronal_labels   <- labels[which(predicted_classes == "Non.Neuronal"),]
 
+# Leave non-neuronal out, because it contains classed that are inclassifiabe (too small, or  uniform)
+
 class_models_to_train <- c("GABAergic", 
                            "Glutamatergic")
-
-#                           "Non.Neuronal")
-
-class_models_to_train <- c("Non.Neuronal")
 
 data_to_be_used <- list(
     "GABAergic"     = gabaergic_data,
@@ -398,17 +400,12 @@ gabaergic_subclass_list <- c(
   "Lamp5",
   #"Meis2",    # Only one class
   "Pvalb",
-   #"Serpinf1",
+  #"Serpinf1",
   "Sncg",
   "Sst",
   "Vip"
   )
 
-gabaergic_subclass_list <- c(
-
-  "Serpinf1"
-
-  )
 
 gabaergic_data_list <- list(
   "Pvalb"    = pvalb_data,
@@ -470,7 +467,7 @@ for (m in gabaergic_subclass_list) {
 
 ```
 
-@@@@
+
 
 # Predict subclasses for Glutamatergic
 

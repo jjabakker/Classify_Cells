@@ -7,25 +7,24 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+
 ```{r}
-rm(list = ls())
+
+rm(list = ls())    # Remove all variables
+cat("\014")        # Clear the console
+set.seed(1234)     # For random repeatability
+
+```
+
+
+```{r}
 
 library(plyr) 
 library(data.table)
 library(tidyverse)
 
 ```
-
-
-```{r}
-proj_path   <- file.path(".")
-data_path   <- file.path(proj_path, "DataSets")
-log_path    <- file.path(proj_path, "Logs")
-rdata_path  <- file.path(proj_path, "rData")
-config_path <- file.path(proj_path, "config")   
-import_path <- file.path(proj_path, "../Import_Data") 
-```
-
 
  
 
@@ -35,7 +34,7 @@ import_path <- file.path(proj_path, "../Import_Data")
 
 ```{r}
 
-data_bo             <- as.data.frame(fread("../Import_Data/Bo/GSE125616_READ_COUNT_table_lvbo_TE_gencode.txt", 
+data_bo             <- as.data.frame(fread("./Import_Data/Bo/GSE125616_READ_COUNT_table_lvbo_TE_gencode.txt", 
                                            header = TRUE))
 data_bo             <- data_bo[,-c(2:6)]
 data_bo             <- column_to_rownames(data_bo, var = "Geneid")
@@ -49,7 +48,7 @@ dim(data_bo)
 
 ```{r}
 
-labels_bo              <- as.data.frame(fread("../Import_Data/Bo/cell.lineage.csv", header = TRUE))
+labels_bo              <- as.data.frame(fread("./Import_Data/Bo/cell.lineage.csv", header = TRUE))
 
 labels_bo              <- labels_bo[, c("Phase", "V1")]
 labels_bo              <- as.data.frame(apply(as.matrix(labels_bo), 2, function(x) str_replace(x, "Untypical", "na")))
@@ -86,7 +85,7 @@ write.csv(data_bo,        "DataSets/Bo/data.csv",   row.names = TRUE)
 
 ```{r}
 
-data_zhou  <- as.data.frame(fread("../Import_Data/Zhou/GSE109555_TrioSeq_TPM.txt", header = FALSE))
+data_zhou  <- as.data.frame(fread("./Import_Data/Zhou/GSE109555_TrioSeq_TPM.txt", header = FALSE))
 data_zhou  <- column_to_rownames(data_zhou, var = "V1")
 data_zhou  <- t(data_zhou)
 dim(data_zhou)
@@ -98,7 +97,7 @@ dim(data_zhou)
 
 ```{r}
 
-labels_zhou              <- as.data.frame(fread("../Import_Data/Zhou/GSE109555_TrioSeq_DataInfo.txt",header = FALSE))
+labels_zhou              <- as.data.frame(fread("./Import_Data/Zhou/GSE109555_TrioSeq_DataInfo.txt",header = FALSE))
 labels_zhou              <- column_to_rownames(labels_zhou, var = "V1")
 labels_zhou[,"V11"]      <- apply(as.matrix(labels_zhou[,"V11"]), 2, function(x) str_replace(x, "Epi", "EPI"))
 labels_zhou              <- labels_zhou[ , c("V11", "V2")]
@@ -131,17 +130,17 @@ write.csv(data_zhou,        "DataSets/Zhou/data.csv",   row.names = TRUE)
 
 ```{r}
 
-# petr1  <- as.data.frame(fread("../Import_Data/Petropoulos/ercc.counts.txt", header = FALSE))
-# petr2  <- as.data.frame(fread("../Import_Data/Petropoulos/ercc.rpkm.txt", header = FALSE))
-# petr3  <- as.data.frame(fread("../Import_Data/Petropoulos/rpkm.txt", header = FALSE))
-# petr4  <- as.data.frame(fread("../Import_Data/Petropoulos/counts.txt", header = FALSE))
-# petr5  <- as.data.frame(fread("../Import_Data/Petropoulos/E-MTAB-3929.sdrf.txt", header = FALSE))
+# petr1  <- as.data.frame(fread("./Import_Data/Petropoulos/ercc.counts.txt", header = FALSE))
+# petr2  <- as.data.frame(fread("./Import_Data/Petropoulos/ercc.rpkm.txt", header = FALSE))
+# petr3  <- as.data.frame(fread("./Import_Data/Petropoulos/rpkm.txt", header = FALSE))
+# petr4  <- as.data.frame(fread("./Import_Data/Petropoulos/counts.txt", header = FALSE))
+# petr5  <- as.data.frame(fread("./Import_Data/Petropoulos/E-MTAB-3929.sdrf.txt", header = FALSE))
 
-data_petr1  <- as.data.frame(fread("../Import_Data/Petropoulos/counts.txt", header = TRUE))
+data_petr1  <- as.data.frame(fread("./Import_Data/Petropoulos/counts.txt", header = TRUE))
 data_petr1  <- column_to_rownames(data_petr1, var = "V1")
 data_petr1  <- as.data.frame(t(data_petr1))
 
-data_petr2  <- as.data.frame(fread("../Import_Data/Petropoulos/rpkm.txt", header = TRUE))
+data_petr2  <- as.data.frame(fread("./Import_Data/Petropoulos/rpkm.txt", header = TRUE))
 data_petr2  <- column_to_rownames(data_petr2, var = "V1")
 data_petr2  <- as.data.frame(t(data_petr2))
 
@@ -152,7 +151,7 @@ data_petr2  <- as.data.frame(t(data_petr2))
 
 ```{r}
 
-labels_petr <- as.data.frame(fread("../Import_Data/Petropoulos/E-MTAB-3929.sdrf.txt", header = TRUE))
+labels_petr <- as.data.frame(fread("./Import_Data/Petropoulos/E-MTAB-3929.sdrf.txt", header = TRUE))
 labels_petr <- labels_petr[ ,  c("Characteristics[inferred lineage]", "Source Name", "Source Name" )]
 labels_petr <- column_to_rownames(labels_petr, var = "Source Name")
 colnames(labels_petr) = c("ident", "cell_id")

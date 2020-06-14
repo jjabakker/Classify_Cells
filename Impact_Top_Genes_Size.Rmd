@@ -11,21 +11,25 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r}
-rm(list = ls())
-set.seed(1234)
-```
 
+rm(list = ls())    # Remove all variables
+cat("\014")        # Clear the console
+set.seed(1234)     # For random repeatability
+
+```
 
 
 ```{r}
 
-# Load the results table to avoid having to redo the calculation
+# Load the results table to avoid having to redo the calculation.
+# If set to FALSE< you start from scratch
 
 if (FALSE) {
   load(file = file.path(rdata_path, "compare_top_genes.rData"))
 }
 
 ```
+
 
 # Specify key use parameters
 
@@ -40,10 +44,28 @@ Zhou         # 2,554 cells, 19,046 genes
 Bo           # 516   cells, 56,924 genes
 Petropoulos1 # 1,529 cells, 26,178 genes 
 
+Note:
+
+I have seen this script stop sometimes during the run, without there being anything obviously wrong
+When that happens you can just restart the script by editing the input and continue where you left off
+Need to watch that you do not get double entries, so you may have to edit the results table
+And of course be aware of fully restarting because t the top of the script, all veriables are removed
+
+
+```{r}
+datasets      <- c("Muraro", "Segerstolpe", "Xin", "Bo", "Zhou", "Petropoulos1")
+#datasets      <- c("Zhou", "Segerstolpe")
+
+
+top_genes_nr  <- c(5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000)
+#top_genes_nr <- c(5, 10)
+
+```
+
 
 ```{r}
 
-# Select preprocessing
+# Select preprocessing (options are pca, nopca, logpca), but for the purpose of the this script just use pca
 preproc_method   <- "pca"
 
 ```
@@ -66,9 +88,10 @@ library(matrixStats)
 library(tictoc)
 library(MazamaCoreUtils)
 
-source("Code/utilities.R")
-source("Code/process_config.R")
-source("Code/predict_model_with_labels.R")
+source("./Code/utilities.R")
+source("./Code/process_config.R")
+source("./Code/predict_model_with_labels.R")
+source("./Code/get_confusion_matrix.R")
 
 ```
 
@@ -91,6 +114,8 @@ report_out      <- data.frame()
 
 # Information of all the runs will be gathered in the class_summaries list  
 class_summaries <- list()
+
+results         <- data.frame()
 
 # Paths
 proj_path       <- file.path(".")
@@ -125,15 +150,13 @@ if (preproc_method == "pca")  {
 
 ```{r, Read}
 
-datasets      <- c("Muraro", "Segerstolpe", "Xin", "Bo", "Zhou", "Petropoulos1")
-#datasets     <- c("Muraro", "Segerstolpe")
-
-results       <- data.frame()
-
-top_genes_nr  <- c(5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000)
-#top_genes_nr <- c(5, 10)
-
 for (dataset_name in datasets) {
+  
+  cat("\n\n\n*******************************************************************************\n")
+  cat("*******************************************************************************\n")
+  cat(sprintf("Processing dataset %s\n", dataset_name))
+  cat("*******************************************************************************\n")
+  cat("*******************************************************************************\n\n\n")
   
   # Read data from csv source (alternatively you can get the processed rData file with load_single_data)
   ret    <- read_csv_dataset(data_path, dataset_name)
@@ -203,6 +226,10 @@ for (dataset_name in datasets) {
   
   for (nr in top_genes_nr) {  
     
+    cat("\n\n*******************************************************************************\n")
+    cat(sprintf("Processing dataset %s, size of top genes set %d\n", dataset_name, nr))
+    cat("*******************************************************************************\n\n")
+    
     tic(msg = "", quiet = TRUE)
     
     data               <- save_data
@@ -222,6 +249,7 @@ for (dataset_name in datasets) {
                                      method  = caret_preprocess_method,
                                      thresh  = PCA_Threshold,
                                      verbose = TRUE)
+    nr_pc              <- ppm[["numComp"]]
     
     pp_train_data      <- predict(ppm, train_data)
     
@@ -249,17 +277,18 @@ for (dataset_name in datasets) {
     report_out        <- ret$report_out
     predicted_classes <- ret$predicted_classes
     
-    cm <- confusionMatrix(test_data[,1],
-                          predicted_classes,
-                          mode = "everything",
-                          dnn = c("Reference", "Predicted"))
+    cm   <- GetConfusionMatrix(test_data[,1], predicted_classes) 
+                            
     print(cm)
     gbm_accuracy      <- cm[["overall"]][["Accuracy"]]
 
     # Report timer
     toc(log = TRUE, quiet = TRUE)
-    time <- tic.log()[[1]]
+    time_str <- tic.log()[[1]]
     tic.clearlog()
+    temp <- gregexpr("[0-9.]+", time_str)  # Numbers with any number of digits
+    time <- as.numeric(unique(unlist(regmatches(time_str, temp))))
+
     
     if (class(cm[["byClass"]]) == "numeric") {
       medianF1     <- median(cm[["byClass"]]["F1"], na.rm = TRUE)
@@ -271,10 +300,13 @@ for (dataset_name in datasets) {
     
     result            <- data.frame(dataset_name = dataset_name,
                                     top_genes    = nr,
+                                    nr_pc        = nr_pc,
                                     medianF1     = medianF1,
                                     time         = time)
     
     results <- rbind(results, result)
+    
+    print(results)
   }
 }
 
@@ -310,5 +342,19 @@ ggplot(results, aes( x = as.factor(top_genes), y = medianF1)) +
 
 save(results, file = file.path(rdata_path, "compare_top_genes.rData"))
 
+```
+
+
+
+```{r}
+p1 <- ggplot(results) +
+  geom_point(aes(x = nr_pc, y = time)) +
+  theme_light()
+
+p2 <- ggplot(results) +
+  geom_point(aes(x = top_genes, y = nr_pc)) +
+    theme_light()
+
+grid.arrange(p2, p1, ncol = 2)
 ```
 
